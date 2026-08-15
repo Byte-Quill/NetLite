@@ -11,9 +11,12 @@ indefinitely.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from flask import Blueprint, current_app, render_template, request
 from werkzeug.exceptions import BadRequest
 
+from ..db import add_history, prune_history
 from ..services import runner
 from ..services.dispatch import run_tool
 from ..validation import ValidationError
@@ -29,11 +32,44 @@ def _form_value(name: str) -> str:
     return raw
 
 
-def _run_and_render(slug: str, target: str, extra: dict | None = None):
-    """Validate, run the tool, and render its result fragment."""
+def _record(slug: str, target: str, status: str, summary: str) -> None:
+    """Persist one history record, then prune to the retention cap."""
     cfg = current_app.extensions["netlite_config"]
+    db_path = current_app.extensions["netlite_database"]
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     try:
-        result = run_tool(slug, target=target, config=cfg, extra=extra or {})
+        add_history(db_path, slug, target, status, now, summary)
+        prune_history(db_path, cfg.max_history)
+    except Exception:  # history must never break a diagnostic
+        current_app.logger.warning("failed to record history", exc_info=True)
+
+
+def _summary(slug: str, result: dict) -> str:
+    """Build a short, non-sensitive summary string for the history table."""
+    status = result.get("status", "")
+    if slug == "ping":
+        return f"{status}: {result.get('received', 0)}/{result.get('sent', 0)} pkt"
+    if slug == "dns":
+        n4 = len(result.get("ipv4", []) or [])
+        n6 = len(result.get("ipv6", []) or [])
+        return f"{status or 'resolved'}: {n4} IPv4, {n6} IPv6"
+    if slug == "tcp":
+        return f"{result.get('status', '')}: port {result.get('port', '')} {result.get('detail', '')}"
+    if slug == "http":
+        code = result.get("status_code")
+        if code:
+            return f"HTTP {code}"
+        error = result.get("error")
+        return f"error: {error[:60]}" if error else status
+    if slug == "netinfo":
+        return f"host {result.get('hostname', '')}"
+    return status
+
+
+def _run_and_render(slug: str, target: str, extra: dict | None = None):
+    """Validate, run the tool, render the result fragment, record history."""
+    try:
+        result = run_tool(slug, target=target, config=current_app.extensions["netlite_config"], extra=extra or {})
     except ValidationError as exc:
         return render_template(
             "tools/partials/_result_error.html",
@@ -41,6 +77,7 @@ def _run_and_render(slug: str, target: str, extra: dict | None = None):
             message=str(exc),
         ), 400
     except runner.ToolTimeout as exc:
+        _record(slug, target, "timeout", str(exc)[:120])
         return render_template(
             "tools/partials/_result_error.html",
             slug=slug,
@@ -54,6 +91,8 @@ def _run_and_render(slug: str, target: str, extra: dict | None = None):
             message="The tool failed unexpectedly.",
         ), 500
 
+    status = result.get("status", "done")
+    _record(slug, target, status, _summary(slug, result))
     return render_template(
         f"tools/partials/_result_{slug}.html",
         slug=slug,

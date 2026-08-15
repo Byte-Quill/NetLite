@@ -1,11 +1,11 @@
-"""Core pages: dashboard, health endpoint, and history placeholder."""
+"""Core pages: dashboard, health endpoint, and history."""
 
 from __future__ import annotations
 
 from flask import Blueprint, current_app, jsonify, render_template
 
 from .. import __version__
-from ..db import list_history
+from ..db import delete_history, list_history
 
 bp = Blueprint("main", __name__)
 
@@ -61,11 +61,26 @@ def index():
 def history():
     """Render the recent-diagnostics history page."""
     cfg = current_app.extensions["netlite_config"]
-    records = list_history(cfg.database, cfg.max_history)
+    db_path = current_app.extensions["netlite_database"]
+    records = list_history(db_path, cfg.max_history)
     return render_template(
         "history.html",
         records=records,
         max_history=cfg.max_history,
+    )
+
+
+@bp.post("/history/<int:record_id>/delete")
+def history_delete(record_id: int):
+    """Delete a single history record (HTMX-friendly)."""
+    db_path = current_app.extensions["netlite_database"]
+    deleted = delete_history(db_path, record_id)
+    if not deleted:
+        return "", 404
+    # Return an out-of-band removal target so HTMX can drop the row.
+    return (
+        '<tr class="row-deleted" id="history-row-%d" hx-swap-oob="outerHTML"></tr>'
+        % record_id
     )
 
 

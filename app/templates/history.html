@@ -9,16 +9,26 @@
 {% if records %}
 <table class="history-table">
   <thead>
-    <tr><th scope="col">Tool</th><th scope="col">Target</th><th scope="col">Status</th><th scope="col">When</th><th scope="col">Summary</th></tr>
+    <tr><th scope="col">Tool</th><th scope="col">Target</th><th scope="col">Status</th><th scope="col">When</th><th scope="col">Summary</th><th scope="col"><span class="sr-only">Actions</span></th></tr>
   </thead>
   <tbody>
     {% for r in records %}
-    <tr>
+    <tr id="history-row-{{ r.id }}">
       <td>{{ r.tool }}</td>
       <td class="mono wrap">{{ r.target }}</td>
       <td><span class="pill {{ 'pill-open' if r.status in ('ok','open') else 'pill-closed' }}">{{ r.status }}</span></td>
       <td class="muted">{{ r.timestamp }}</td>
       <td class="muted wrap">{{ r.summary }}</td>
+      <td>
+        <button
+          type="button"
+          class="btn-danger btn-small"
+          hx-post="{{ url_for('main.history_delete', record_id=r.id) }}"
+          hx-target="#history-row-{{ r.id }}"
+          hx-swap="outerHTML"
+          hx-confirm="Delete this history record?"
+        >Delete</button>
+      </td>
     </tr>
     {% endfor %}
   </tbody>
