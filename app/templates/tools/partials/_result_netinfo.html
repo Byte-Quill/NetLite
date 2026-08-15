@@ -1,8 +1,10 @@
 <div class="result result-ok" data-tool-result="netinfo">
   <dl class="result-list">
     <div><dt>Hostname</dt><dd><code>{{ result.hostname }}</code></dd></div>
-    {% for key, value in result.items() if key not in ('hostname',)}
-    <div><dt>{{ key | replace('_', ' ') | capitalize }}</dt><dd class="wrap">{{ value if value else '—' }}</dd></div>
+    {% for key, value in result.items() %}
+      {% if key != 'hostname' %}
+      <div><dt>{{ key | replace('_', ' ') | capitalize }}</dt><dd class="wrap">{{ value if value else '—' }}</dd></div>
+      {% endif %}
     {% endfor %}
   </dl>
 </div>
