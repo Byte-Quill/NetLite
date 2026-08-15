@@ -38,6 +38,13 @@ def test_lookup_returns_ipv4_and_ipv6(monkeypatch):
         ]
     )
     monkeypatch.setattr(dns_svc.socket, "getaddrinfo", lambda host, port: infos)
+    # Canonical reverse lookup would block on the OS resolver; stub it to fail
+    # fast so the unit is deterministic and offline.
+    monkeypatch.setattr(
+        dns_svc.socket,
+        "getnameinfo",
+        lambda *a, **k: (_ for _ in ()).throw(socket.gaierror(socket.EAI_NONAME, "")),
+    )
     result = dns_svc.lookup("example.com")
     assert result["ipv4"] == ["93.184.216.34", "93.184.216.35"]
     assert result["ipv6"] == ["2606:2800:220:1:248:1893:25c8:1946"]
@@ -78,12 +85,28 @@ def test_lookup_duplicates_deduped(monkeypatch):
         [(socket.AF_INET, "1.2.3.4"), (socket.AF_INET, "1.2.3.4")]
     )
     monkeypatch.setattr(dns_svc.socket, "getaddrinfo", lambda host, port: infos)
+    monkeypatch.setattr(
+        dns_svc.socket,
+        "getnameinfo",
+        lambda *a, **k: (_ for _ in ()).throw(socket.gaierror(socket.EAI_NONAME, "")),
+    )
     result = dns_svc.lookup("example.com")
     assert result["ipv4"] == ["1.2.3.4"]
 
 
 def test_dns_route_valid(client):
-    with mock.patch("socket.getaddrinfo", return_value=_fake_addrinfo([(socket.AF_INET, "1.2.3.4")])):
+    # Mock both getaddrinfo AND getnameinfo so no OS resolver is contacted.
+    infos = _fake_addrinfo([(socket.AF_INET, "1.2.3.4")])
+
+    def fake_addrinfo(_host, _port=0, *_a, **_k):
+        return infos
+
+    def fake_getnameinfo(*_a, **_k):
+        raise socket.gaierror(socket.EAI_NONAME, "")
+
+    with mock.patch("socket.getaddrinfo", fake_addrinfo), mock.patch(
+        "socket.getnameinfo", fake_getnameinfo
+    ):
         resp = client.post("/tools/dns", data={"target": "example.com"})
         assert resp.status_code == 200
         assert b'data-tool-result="dns"' in resp.data
