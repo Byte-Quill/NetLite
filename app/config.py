@@ -19,6 +19,7 @@ DEFAULT_PORT = 5000
 DEFAULT_SECRET_KEY = "dev-only-change-me"
 DEFAULT_DB_NAME = "netlite.sqlite3"
 DEFAULT_MAX_HISTORY = 100
+MAX_HISTORY_LIMIT = 5000  # hard ceiling to prevent unbounded DB growth
 DEFAULT_MAX_CONTENT_LENGTH = 1 * 1024 * 1024  # 1 MiB of form data
 
 # Network operation timeouts (seconds).  Every external operation must be
@@ -99,7 +100,10 @@ class Config:
             port=_env_int("NETLITE_PORT", DEFAULT_PORT, minimum=1),
             secret_key=os.environ.get("NETLITE_SECRET_KEY", DEFAULT_SECRET_KEY),
             database=Path(os.environ.get("NETLITE_DB", DEFAULT_DB_NAME)),
-            max_history=_env_int("NETLITE_MAX_HISTORY", DEFAULT_MAX_HISTORY, minimum=1),
+            max_history=min(
+                _env_int("NETLITE_MAX_HISTORY", DEFAULT_MAX_HISTORY, minimum=1),
+                MAX_HISTORY_LIMIT,
+            ),
             max_content_length=_env_int(
                 "NETLITE_MAX_CONTENT_LENGTH", DEFAULT_MAX_CONTENT_LENGTH, minimum=1024
             ),

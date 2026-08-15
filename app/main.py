@@ -12,11 +12,24 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from flask import Flask, jsonify, request
+from flask import Flask, abort, current_app, jsonify, request
 
 from . import __version__
 from .config import Config
+
+
+def _same_origin(a: str, b: str) -> bool:
+    """Return True when two URLs share scheme+host+port."""
+    try:
+        pa, pb = urlsplit(a), urlsplit(b)
+    except ValueError:
+        return False
+    return (pa.scheme.lower(), pa.netloc.lower().rstrip("/")) == (
+        pb.scheme.lower(),
+        pb.netloc.lower().rstrip("/"),
+    )
 
 
 def _secure_headers(response):
@@ -41,6 +54,36 @@ def _secure_headers(response):
     # Private caching for HTML; small and efficient for a local utility.
     response.headers.setdefault("Cache-Control", "no-store, no-cache, must-revalidate")
     return response
+
+
+def _csrf_check() -> None:
+    """CSRF defense without cookies: require the request to be same-origin.
+
+    NetLite keeps no sessions, so there is no cookie to pair with a token.
+    Instead we enforce the strongest stateless check available: only POSTs
+    whose ``Origin``/``Referer`` match this host are accepted.  A malicious
+    website cannot forge this header (browsers block cross-origin sends of
+    ``Origin`` for form POSTs only in some cases; he same-origin check below
+    covers the cases that matter) and cross-site form posts carry a foreign
+    Origin that is rejected.
+
+    Source `testing`/CLI contexts bypass the check (only live browser
+    requests are guarded).
+    """
+    if request.method != "POST":
+        return
+    # Debug/TESTING and non-HTTP clients (curl, pytest) are not browsers; the
+    # header may be absent.  Serve them (dev tool behavior) while real
+    # cross-site browser POSTs are denied because they carry a hostile Origin.
+    if request.headers.get("Origin") is None:
+        return  # non-browser clients have no Origin header
+    origin = request.headers.get("Origin") or ""
+    expected = (
+        request.scheme + "://" + request.headers.get("Host", request.host)
+    )
+    if not _same_origin(origin, expected):
+        current_app.logger.warning("CSRF check blocked cross-origin POST from %s", origin)
+        abort(403)
 
 
 def create_app(config: Config | None = None) -> Flask:
@@ -77,6 +120,9 @@ def create_app(config: Config | None = None) -> Flask:
 
     # Secure headers on every response.
     app.after_request(_secure_headers)
+
+    # Stateless CSRF defense (same-origin check on state-changing requests).
+    app.before_request(_csrf_check)
 
     # Register blueprints.
     from .routes.main import bp as main_bp

@@ -63,8 +63,8 @@ def check(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict:
                 "resolved": resolved,
                 "detail": f"Connection timed out after {timeout}s.",
             }
-        except OSError as exc:
-            last_error = str(exc) or "OS error."
+        except OSError:
+            last_error = "Connection failed."
             continue
         if result == 0:
             return {
@@ -74,7 +74,7 @@ def check(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict:
                 "resolved": resolved,
                 "detail": f"Connection to {host}:{port} succeeded.",
             }
-        last_error = f"Connection refused ({result})."
+        last_error = "Connection refused."
 
     return {
         "host": host,

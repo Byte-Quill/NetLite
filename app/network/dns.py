@@ -5,6 +5,20 @@ from __future__ import annotations
 import socket
 from dataclasses import dataclass
 
+#: Common gai error codes → friendly messages (no raw OS text leakage).
+_GAI_MSG = {
+    socket.EAI_NONAME: "The hostname does not exist in DNS.",
+    socket.EAI_AGAIN: "The nameserver temporarily failed; try again.",
+    socket.EAI_NODATA: "The hostname has no address records.",
+    socket.EAI_FAIL: "The nameserver returned a permanent failure.",
+    socket.EAI_SERVICE: "The requested service is not available.",
+}
+
+
+def _friendly_gai_error(exc: socket.gaierror) -> str:
+    """Return a friendly message for a gai error without leaking internals."""
+    return _GAI_MSG.get(exc.errno, "A DNS resolution error occurred.")
+
 
 @dataclass(frozen=True)
 class DnsResult:
@@ -35,7 +49,7 @@ def lookup(host: str) -> dict:
             "ipv4": [],
             "ipv6": [],
             "canonical": None,
-            "error": f"Could not resolve host: {exc.strerror or exc}",
+            "error": f"Could not resolve host: {_friendly_gai_error(exc)}",
         }
 
     by_family: dict[int, set[str]] = {}

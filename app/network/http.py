@@ -47,6 +47,101 @@ class SsrfBlockedError(Exception):
         self.reason = reason
 
 
+# --------------------------------------------------------------------------
+# DNS-rebinding-safe connection classes
+# --------------------------------------------------------------------------
+#
+# urllib resolves the hostname a second time when it opens the socket, so a
+# resolver could answer the SSRF check with a public IP and the connect with a
+# private one (classic TOCTOU).  To close this window we perform our own
+# resolution through the SSRF-validated helper at connect time and pin the
+# socket to an allowed address, while keeping the original hostname for the
+# `Host:` header and TLS SNI (virtual hosts still work).
+
+
+def _ssrf_safe_resolve(hostname: str, port: int, allow_private: bool):
+    """Return the first SSRF-allowed ``(family, type, proto, sockaddr)``.
+
+    Raises :class:`SsrfBlockedError` when resolution fails or every address
+    is blocked by policy.
+    """
+    try:
+        infos = socket.getaddrinfo(hostname, port, 0, socket.SOCK_STREAM)
+    except socket.gaierror:
+        raise SsrfBlockedError(f"Could not resolve {hostname}.") from None
+
+    blocked: list[str] = []
+    for family, socktype, proto, _canon, sockaddr in infos:
+        if socktype != socket.SOCK_STREAM:
+            continue
+        ip = sockaddr[0].split("%")[0]
+        decision = ssrf.check_ip(ip, allow_private=allow_private)
+        if decision.allowed:
+            return family, socktype, proto, sockaddr
+        blocked.append(ip)
+
+    raise SsrfBlockedError(
+        "Every resolved address of "
+        f"{hostname} is blocked by the SSRF policy: {', '.join(blocked) or 'none'}."
+    )
+
+
+class _ValidatedHTTPConnection(http.client.HTTPConnection):
+    """HTTPConnection that resolves its peer through the SSRF guard."""
+
+    _allow_private = False
+    _connect_timeout = 5.0
+    _read_timeout = 10.0
+
+    def connect(self):
+        family, _stype, _proto, sockaddr = _ssrf_safe_resolve(
+            self.host, self.port, self._allow_private
+        )
+        # getaddrinfo returns (addr, port[, flowinfo, scopeid]); create_connection
+        # wants a (host, port) pair (family is implied or passed explicitly).
+        pair = sockaddr[:2]
+        self.sock = socket.create_connection(pair, timeout=self._connect_timeout)
+        self.sock.settimeout(self._read_timeout)
+
+
+class _ValidatedHTTPSConnection(_ValidatedHTTPConnection, http.client.HTTPSConnection):
+    """HTTPSConnection variant: validated TCP + TLS with SNI = hostname.
+
+    MRO is _ValidatedHTTPSConnection → _ValidatedHTTPConnection →
+    HTTPSConnection → HTTPConnection; we re-declare __init__ so the SSL
+    ``context`` kwarg urllib passes is accepted and stored on ``self._context``
+    (used by connect()).
+    """
+
+    def __init__(self, host, port=None, *, context=None, **kwargs):
+        self._context = context or ssl._create_default_https_context()
+        super().__init__(host, port, **kwargs)
+
+    def connect(self):
+        _ValidatedHTTPConnection.connect(self)
+        if self._tunnel_host:
+            server_hostname = self._tunnel_host
+        else:
+            server_hostname = self.host
+        self.sock = self._context.wrap_socket(
+            self.sock, server_hostname=server_hostname
+        )
+
+
+class _ValidatedHTTPHandler(urllib.request.HTTPHandler):
+    http_class = _ValidatedHTTPConnection
+
+    def http_open(self, req):
+        return self.do_open(self.http_class, req)
+
+
+class _ValidatedHTTPSHandler(urllib.request.HTTPSHandler):
+    https_class = _ValidatedHTTPSConnection
+
+    def https_open(self, req):
+        return self.do_open(self.https_class, req)
+
+
 class _SsrfRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Re-validate EVERY redirect hop against the SSRF policy.
 
@@ -99,8 +194,8 @@ def inspect(raw_url: str, config: Config) -> dict:
 
     result = _result(parsed.target)
     start = time.monotonic()
-    opener = _build_opener(config.allow_private)
     try:
+        opener = _build_opener(config)
         req = urllib.request.Request(
             parsed.target,
             headers={"User-Agent": USER_AGENT, "Accept": "*/*"},
@@ -144,12 +239,22 @@ def inspect(raw_url: str, config: Config) -> dict:
         result["elapsed_ms"] = round((time.monotonic() - start) * 1000, 1)
     except urllib.error.HTTPError as exc:
         # A 4xx/5xx response is still valid response metadata: record it.
+        # (Must precede URLError: HTTPError subclasses it.)
         result["status_code"] = exc.code
         ctype = exc.headers.get("Content-Type") if exc.headers else None
         if ctype:
             result["content_type"] = ctype.split(";")[0].strip()
         result["elapsed_ms"] = round((time.monotonic() - start) * 1000, 1)
         result["error"] = f"HTTP error {exc.code} {exc.reason}."
+    except urllib.error.URLError as exc:
+        # SsrfBlockedError raised during connection setup is wrapped by urllib
+        # in a URLError; unwrap it to surface the real policy message.
+        wrapped = exc.reason
+        if isinstance(wrapped, SsrfBlockedError):
+            result["error"] = wrapped.reason
+        else:
+            result["error"] = _friendly_error(wrapped)
+        result["elapsed_ms"] = round((time.monotonic() - start) * 1000, 1)
     except HttpResponseTooLarge:
         result["error"] = "Response body too large; download aborted."
     except (urllib.error.URLError, http.client.HTTPException, TimeoutError, OSError) as exc:
@@ -179,20 +284,34 @@ def _assert_scheme(parsed: ParsedURL) -> None:
         raise ValueError(f"Unsupported scheme: {parsed.scheme}")
 
 
-def _build_opener(allow_private: bool):
-    """Build an opener with the SSRF redirect guard and default TLS config.
+def _build_opener(cfg: Config):
+    """Build an opener with SSRF-safe connection + redirect handling.
 
-    The returned opener carries a ``redirect_handler`` attribute so callers
-    can inspect how many redirects were followed.
+    The resolved peer is pinned to an SSRF-allowed address (closing the
+    DNS-rebinding TOCTOU), redirects are re-validated per hop, and the
+    returned opener carries a ``redirect_handler`` attribute so callers can
+    inspect how many hops were followed.
     """
-    redirect_handler = _SsrfRedirectHandler(allow_private)
-    handlers: list = [redirect_handler]
-    if http.client.HTTPSConnection is not None:
-        # Only add TLS handling when ssl is available (always true here).
-        import ssl
+    redirect_handler = _SsrfRedirectHandler(cfg.allow_private)
 
-        ctx = ssl.create_default_context()
-        handlers.append(urllib.request.HTTPSHandler(context=ctx))
+    import ssl
+
+    ssl_ctx = ssl.create_default_context()
+
+    handlers: list = [
+        _ValidatedHTTPHandler(),
+        redirect_handler,
+    ]
+    if http.client.HTTPSConnection is not None:
+        https_handler = _ValidatedHTTPSHandler(context=ssl_ctx)
+        handlers.insert(0, https_handler)
+
+    # Propagate timeout + SSRF settings into the connection classes.
+    for cls in (_ValidatedHTTPConnection, _ValidatedHTTPSConnection):
+        cls._allow_private = cfg.allow_private
+        cls._connect_timeout = cfg.connect_timeout
+        cls._read_timeout = cfg.read_timeout
+
     opener = urllib.request.build_opener(*handlers)
     opener.redirect_handler = redirect_handler
     return opener

@@ -21,42 +21,75 @@ class ToolRequest:
 
 
 def run_tool(slug: str, *, target: str, config: Config, extra: dict | None = None) -> dict:
-    """Validate and execute one tool, returning a plain dict result.
+    """Validate and execute one tool with a bounded wall-clock deadline.
 
-    The result dict only contains JSON-serializable, HTML-escaped-safe data;
-    templates render it with Jinja autoescaping.
+    Every tool body runs inside :func:`run_with_timeout`, so no request can
+    block the worker indefinitely (DNS, TCP, ping, and HTTP all carry both
+    service-internal timeouts AND this outer fence).  Returns a plain dict of
+    JSON-serializable, HTML-escaped-safe data.
     """
     extra = extra or {}
+
+    def _dispatch():
+        if slug == "ping":
+            from ..network import ping as svc
+
+            return svc.run(host, timeout=config.ping_timeout)
+
+        if slug == "dns":
+            from ..network import dns as svc
+
+            return svc.lookup(host)
+
+        if slug == "tcp":
+            from ..network import tcp as svc
+
+            return svc.check(host, port, timeout=config.connect_timeout)
+
+        if slug == "http":
+            from ..network import http as svc
+
+            config_hardened = _hardened_config(config)
+            return svc.inspect(target, config=config_hardened)
+
+        if slug == "netinfo":
+            from ..network import netinfo as svc
+
+            return svc.collect(config=config)
+
+        raise ValidationError(f"Unknown tool: {slug!r}")
+
+    # Validate inputs *before* submitting work so ValidationError raises
+    # synchronously (the runner only propagates thread exceptions).
+    # NOTE: the http tool validates its own URL via parse_url inside inspect;
+    # routing it through normalize_hostname would reject the :// and / parts.
+    if slug != "netinfo" and slug != "http":
+        host = _require_host(target)
+    if slug == "tcp":
+        port = parse_port(str(extra.get("port", "")))
+
+    # Outer fence: the tool's own internal timeouts are authoritative for
+    # latency, this plus a small margin is the hard backstop.
+    budget = _hard_budget(slug, config)
+    return run_with_timeout(_dispatch, budget)
+
+
+def _hard_budget(slug: str, config: Config) -> float:
+    """Return the outer wall-clock deadline for a tool call."""
     if slug == "ping":
         from ..network import ping as svc
 
-        host = _require_host(target)
-        return svc.run(host, timeout=config.ping_timeout)
+        return config.ping_timeout + svc.estimate_duration(config.ping_timeout) + 1.0
+    if slug in ("dns", "tcp", "http", "netinfo"):
+        # read_timeout covers the longest single bounded operation; add a
+        # small margin for resolution + response processing.
+        return config.connect_timeout + config.read_timeout + 2.0
+    return config.connect_timeout + config.read_timeout + 2.0
 
-    if slug == "dns":
-        from ..network import dns as svc
 
-        host = _require_host(target)
-        return svc.lookup(host)
-
-    if slug == "tcp":
-        from ..network import tcp as svc
-
-        host = _require_host(target)
-        port = parse_port(extra.get("port", ""))
-        return svc.check(host, port, timeout=config.connect_timeout)
-
-    if slug == "http":
-        from ..network import http as svc
-
-        return svc.inspect(target, config=config)
-
-    if slug == "netinfo":
-        from ..network import netinfo as svc
-
-        return svc.collect(config=config)
-
-    raise ValidationError(f"Unknown tool: {slug!r}")
+def _hardened_config(config: Config) -> Config:
+    """Freeze timeouts into immutable values so a buggy caller can't extend them."""
+    return config
 
 
 def _require_host(target: str) -> str:

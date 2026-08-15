@@ -31,6 +31,9 @@ MAX_URL_LENGTH = 2048
 _HOSTNAME_RE = re.compile(r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
 _ALLOWED_SCHEMES = {"http", "https"}
 
+# Canonical decimal port, 1-65535, no sign, no padding, no hex.
+_PORT_RE = re.compile(r"[1-9][0-9]{0,4}")
+
 
 class ValidationError(ValueError):
     """Raised when user input fails validation."""
@@ -96,11 +99,20 @@ def ip_address_canonical(value: str) -> str:
 
 
 def parse_port(value: str | int) -> int:
-    """Validate a port number; raises :class:`ValidationError` if invalid."""
-    try:
+    """Validate a port number; raises :class:`ValidationError` if invalid.
+
+    Accepts a canonical decimal string or int in 1..65535.  Rejects
+    whitespace-padded, signed, hex, or otherwise ambiguous encodings so a
+    string like ``" 443"`` or ``"+443"`` cannot slip past.
+    """
+    if isinstance(value, int) and not isinstance(value, bool):
+        port = value
+    elif isinstance(value, str):
+        if not _PORT_RE.fullmatch(value):
+            raise ValidationError("Port must be a number between 1 and 65535.")
         port = int(value)
-    except (TypeError, ValueError):
-        raise ValidationError("Port must be an integer between 1 and 65535.") from None
+    else:
+        raise ValidationError("Port must be a number between 1 and 65535.")
     if port < 1 or port > 65535:
         raise ValidationError("Port must be between 1 and 65535.")
     return port
