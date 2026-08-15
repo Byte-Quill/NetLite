@@ -52,12 +52,16 @@ def lookup(host: str) -> dict:
     # Best-effort canonical hostname via reverse lookup of the first address.
     if not canonical and ipv4:
         try:
-            canonical = socket.getnameinfo((ipv4[0], 0), socket.NI_NAMEREQD) or None
+            host, _port = socket.getnameinfo((ipv4[0], 0), socket.NI_NAMEREQD)
+            canonical = host or None
         except (socket.gaierror, OSError):
             canonical = None
     elif not canonical and ipv6:
         try:
-            canonical = socket.getnameinfo((ipv6[0].split("%")[0], 0, 0, 0), socket.NI_NAMEREQD) or None
+            host, _port = socket.getnameinfo(
+                (ipv6[0].split("%")[0], 0, 0, 0), socket.NI_NAMEREQD
+            )
+            canonical = host or None
         except (socket.gaierror, OSError):
             canonical = None
 

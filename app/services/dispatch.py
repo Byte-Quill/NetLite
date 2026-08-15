@@ -31,11 +31,7 @@ def run_tool(slug: str, *, target: str, config: Config, extra: dict | None = Non
         from ..network import ping as svc
 
         host = _require_host(target)
-
-        def _ping():
-            return svc.run(host, timeout=config.ping_timeout)
-
-        return run_with_timeout(_ping, config.ping_timeout + svc.estimate_duration(config.ping_timeout) + 1.0)
+        return svc.run(host, timeout=config.ping_timeout)
 
     if slug == "dns":
         from ..network import dns as svc
