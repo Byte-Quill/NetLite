@@ -1,35 +1,88 @@
-# Python
+# ------------------------------------------------------------------
+# NetLite — Python / Flask / SQLite project
+# Based on the GitHub Python.gitignore template, trimmed to this stack.
+# ------------------------------------------------------------------
+
+# ---- Byte-compiled / optimized / DLL files -------------------------
 __pycache__/
 *.py[cod]
-*.egg-info/
-.eggs/
+*$py.class
+*.so
+
+# ---- Distribution / packaging --------------------------------------
+.Python
 build/
+develop-eggs/
 dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Virtual environment
-.venv/
+# ---- Virtual environments -------------------------------------------
+.env
+.venv
+env/
 venv/
+ENV/
+env.bak/
+venv.bak/
+pythonenv/
+pip-wheel-metadata/
+share/python-wheels/
 
-# Flask / app runtime
+# ---- Flask application runtime --------------------------------------
+# SQLite lives in instance/ (created at startup); the WAL journal and
+# shared-memory sidecars must never be committed even if a custom
+# NETLITE_DB points the database elsewhere.
 instance/
+.flaskenv
 *.sqlite
 *.sqlite3
 *.db
-.flaskenv
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*-journal
 
-# Testing / coverage
-.pytest_cache/
-.coverage
+# ---- Logs ------------------------------------------------------------
+logs/
+*.log
+
+# ---- Unit test / coverage reports -------------------------------------
 htmlcov/
 .tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
 
-# Tooling
+# ---- Linting / type checking -------------------------------------------
 .ruff_cache/
 .mypy_cache/
-*.pyc
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
 
-# OS / editor
+# ---- OS / editor --------------------------------------------------------
 .DS_Store
+Thumbs.db
 *.swp
+*~
 .idea/
 .vscode/
