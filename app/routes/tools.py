@@ -11,7 +11,7 @@ indefinitely.
 
 from __future__ import annotations
 
-from flask import Blueprint, current_app, render_template
+from flask import Blueprint, current_app, render_template, request
 from werkzeug.exceptions import BadRequest
 
 from ..services import runner
@@ -23,7 +23,7 @@ bp = Blueprint("tools", __name__)
 
 def _form_value(name: str) -> str:
     """Read a form field, stripping whitespace and enforcing length."""
-    raw = (current_app.request.form.get(name) or "").strip()
+    raw = (request.form.get(name) or "").strip()
     if len(raw) > 512:
         raise ValidationError("Input is too long.")
     return raw

@@ -20,16 +20,25 @@ from .config import Config
 
 
 def _secure_headers(response):
-    """Attach baseline security headers to every response."""
+    """Attach baseline security headers to every response.
+
+    CSP notes:
+    * ``script-src 'self' 'unsafe-eval'`` — ``'unsafe-eval'`` is required by
+      Alpine.js, whose expression engine compiles attribute expressions at
+      runtime.  Inline and remote scripts remain blocked (``script-src
+      'self'``), so the primary XSS mitigation stays in force.  See
+      docs/security.md for the rationale and trade-offs.
+    """
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "default-src 'self'; script-src 'self' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'self'",
     )
-    # Private caching for HTML; smalle and efficient for a local utility.
+    # Private caching for HTML; small and efficient for a local utility.
     response.headers.setdefault("Cache-Control", "no-store, no-cache, must-revalidate")
     return response
 
