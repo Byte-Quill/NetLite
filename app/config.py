@@ -93,7 +93,7 @@ class Config:
     instance_path: Path = field(default=Path("instance"), init=False, repr=False)
 
     @classmethod
-    def from_env(cls) -> "Config":
+    def from_env(cls) -> Config:
         """Build a :class:`Config` from the process environment."""
         return cls(
             host=os.environ.get("NETLITE_HOST", DEFAULT_HOST),

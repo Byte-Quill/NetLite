@@ -10,7 +10,6 @@ The factory keeps the app small and explicit:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -172,4 +171,4 @@ def _register_error_handlers(app: Flask) -> None:
 
 
 # Re-export for convenience.
-__all__ = ["__version__", "create_app", "Config"]
+__all__ = ["Config", "__version__", "create_app"]

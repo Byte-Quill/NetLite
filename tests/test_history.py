@@ -2,14 +2,9 @@
 
 from __future__ import annotations
 
-import sqlite3
 from datetime import datetime, timezone
 
-import pytest
-
 from app import db as db_layer
-from app.config import Config
-from app.main import create_app
 
 
 def _now():
@@ -112,7 +107,6 @@ def test_max_history_respected_end_to_end(app):
     """The retention cap constrains what's shown, not just stored."""
     from app import db as db_layer
 
-    cfg = app.extensions["netlite_config"]
     path = app.extensions["netlite_database"]
     for i in range(5):
         db_layer.add_history(path, "ping", f"h{i}.com", "ok", "s", _now())

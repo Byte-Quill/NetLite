@@ -90,7 +90,7 @@ def test_timeout(monkeypatch):
 
     class TimeoutSocket(_FakeSocket):
         def connect_ex(self, _sockaddr):
-            raise socket.timeout("timed out")
+            raise TimeoutError("timed out")
 
     monkeypatch.setattr(tcp_svc.socket, "socket", lambda *a, **k: TimeoutSocket())
     result = tcp_svc.check("example.com", 80, timeout=1.0)

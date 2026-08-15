@@ -11,18 +11,14 @@ Covers the defenses added in the hardening pass:
 from __future__ import annotations
 
 import socket
-from unittest import mock
 
 import pytest
 
-from app.config import Config
 from app.main import _same_origin
 from app.network import dns as dns_svc
 from app.network import http as http_svc
 from app.network import tcp as tcp_svc
-from app.services import dispatch
 from app.validation import ValidationError, parse_port
-
 
 # --- CSRF -------------------------------------------------------------------
 
@@ -79,8 +75,6 @@ def test_validated_http_connection_pins_resolved_ip(monkeypatch):
     conn._connect_timeout = 1.0
     conn._read_timeout = 1.0
 
-    created = []
-
     class FakeSock:
         def settimeout(self, _t):
             pass
@@ -105,7 +99,7 @@ def test_validated_http_connection_pins_resolved_ip(monkeypatch):
 
 def test_validated_http_connection_blocks_private(monkeypatch):
     """The validated connection must refuse an SSRF-blocked resolution."""
-    from app.network.http import _ValidatedHTTPConnection, SsrfBlockedError
+    from app.network.http import SsrfBlockedError, _ValidatedHTTPConnection
 
     conn = _ValidatedHTTPConnection("internal.test", 80)
     conn._allow_private = False

@@ -18,7 +18,7 @@ _RESOLV_CONF = "/etc/resolv.conf"
 def _default_gateway_linux() -> str | None:
     """Read the default IPv4 gateway from /proc/net/route (Linux only)."""
     try:
-        with open(_PROC_ROUTE, "r", encoding="utf-8") as fh:
+        with open(_PROC_ROUTE, encoding="utf-8") as fh:
             for line in fh:
                 parts = line.split()
                 if len(parts) >= 3 and parts[0] != "Iface" and parts[1] == "00000000":
@@ -97,7 +97,7 @@ def _present(info: dict) -> dict:
 def _read_resolv_conf() -> list[str]:
     servers: list[str] = []
     try:
-        with open(_RESOLV_CONF, "r", encoding="utf-8") as fh:
+        with open(_RESOLV_CONF, encoding="utf-8") as fh:
             for line in fh:
                 line = line.strip()
                 if line.startswith("nameserver"):
@@ -109,4 +109,4 @@ def _read_resolv_conf() -> list[str]:
     return servers
 
 
-__all__ = ["collect", "_default_gateway_linux", "_read_resolv_conf"]
+__all__ = ["_default_gateway_linux", "_read_resolv_conf", "collect"]

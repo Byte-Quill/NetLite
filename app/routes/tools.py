@@ -14,7 +14,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from flask import Blueprint, current_app, render_template, request
-from werkzeug.exceptions import BadRequest
 
 from ..db import add_history, prune_history
 from ..services import runner

@@ -15,7 +15,6 @@ This keeps:
 
 from __future__ import annotations
 
-import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 
 # A single reusable executor for the whole process.  Worker threads are
@@ -46,8 +45,8 @@ def run_with_timeout(fn, timeout: float | None, *args, **kwargs) -> object:
         # will terminate on its own shortly after.
         future.cancel()
         raise ToolTimeout(f"Operation timed out after {timeout}s.") from None
-    except Exception as exc:  # propagate tool-specific failures
-        raise exc
+    except Exception:  # propagate tool-specific failures
+        raise
 
 
-__all__ = ["run_with_timeout", "ToolTimeout", "ToolError"]
+__all__ = ["ToolError", "ToolTimeout", "run_with_timeout"]

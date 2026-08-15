@@ -159,4 +159,4 @@ def guard_url(hostname: str, *, allow_private: bool) -> SsrfDecision:
     return decision
 
 
-__all__ = ["check_ip", "check_hostname", "guard_url", "SsrfDecision", "ValidationError"]
+__all__ = ["SsrfDecision", "ValidationError", "check_hostname", "check_ip", "guard_url"]

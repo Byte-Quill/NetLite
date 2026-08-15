@@ -79,8 +79,8 @@ def history_delete(record_id: int):
         return "", 404
     # Return an out-of-band removal target so HTMX can drop the row.
     return (
-        '<tr class="row-deleted" id="history-row-%d" hx-swap-oob="outerHTML"></tr>'
-        % record_id
+        f'<tr class="row-deleted" id="history-row-{record_id}" '
+        'hx-swap-oob="outerHTML"></tr>'
     )
 
 

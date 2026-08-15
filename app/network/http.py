@@ -25,7 +25,7 @@ import urllib.parse
 import urllib.request
 
 from ..config import Config
-from ..validation import ParsedURL, parse_url
+from ..validation import ParsedURL, ValidationError, parse_url
 from . import ssrf
 
 #: Hard cap on redirects followed per request (defense against loops/abuse).
@@ -94,7 +94,7 @@ class _ValidatedHTTPConnection(http.client.HTTPConnection):
     _read_timeout = 10.0
 
     def connect(self):
-        family, _stype, _proto, sockaddr = _ssrf_safe_resolve(
+        _family, _stype, _proto, sockaddr = _ssrf_safe_resolve(
             self.host, self.port, self._allow_private
         )
         # getaddrinfo returns (addr, port[, flowinfo, scopeid]); create_connection
@@ -257,7 +257,7 @@ def inspect(raw_url: str, config: Config) -> dict:
         result["elapsed_ms"] = round((time.monotonic() - start) * 1000, 1)
     except HttpResponseTooLarge:
         result["error"] = "Response body too large; download aborted."
-    except (urllib.error.URLError, http.client.HTTPException, TimeoutError, OSError) as exc:
+    except (http.client.HTTPException, TimeoutError, OSError) as exc:
         reason = getattr(exc, "reason", None) or exc
         result["error"] = _friendly_error(reason)
         result["elapsed_ms"] = round((time.monotonic() - start) * 1000, 1)
@@ -335,4 +335,4 @@ def _friendly_error(exc) -> str:
     return f"Request failed: {exc}"
 
 
-__all__ = ["inspect", "HttpResponseTooLarge"]
+__all__ = ["HttpResponseTooLarge", "inspect"]

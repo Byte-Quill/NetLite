@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from unittest import mock
 
-import pytest
-
 from app.network import ping as ping_svc
 
 GNU_OK_OUTPUT = """\

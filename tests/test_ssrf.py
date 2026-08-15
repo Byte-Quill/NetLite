@@ -10,7 +10,6 @@ import pytest
 from app.network import ssrf
 from app.validation import ValidationError
 
-
 # --- IP classification -----------------------------------------------------
 
 def test_public_ipv4_allowed():

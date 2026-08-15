@@ -7,7 +7,6 @@ SSRF-blocked targets (including redirect rebinding), and URL validation.
 
 from __future__ import annotations
 
-import http.client
 import io
 import socket
 import urllib.error
@@ -49,14 +48,14 @@ class _FakeResponse:
 
 
 def _cfg(**overrides) -> Config:
-    base = dict(
-        secret_key="test",
-        database="test.sqlite3",
-        connect_timeout=1.0,
-        read_timeout=1.0,
-        max_response_bytes=256 * 1024,
-        allow_private=False,
-    )
+    base = {
+        "secret_key": "test",
+        "database": "test.sqlite3",
+        "connect_timeout": 1.0,
+        "read_timeout": 1.0,
+        "max_response_bytes": 256 * 1024,
+        "allow_private": False,
+    }
     base.update(overrides)
     return Config(**base)
 
@@ -196,7 +195,7 @@ def test_inspect_uses_bounded_read_size(monkeypatch):
 
 def test_redirect_to_loopback_blocked(monkeypatch):
     """The redirect handler must refuse a Location pointing at a loopback."""
-    from app.network.http import _SsrfRedirectHandler, SsrfBlockedError
+    from app.network.http import SsrfBlockedError, _SsrfRedirectHandler
 
     monkeypatch.setattr(
         "socket.getaddrinfo",

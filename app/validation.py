@@ -142,6 +142,10 @@ def parse_url(value: str) -> ParsedURL:
     scheme = parts.scheme.lower()
     if scheme not in _ALLOWED_SCHEMES:
         raise ValidationError("Only http and https URLs are allowed.")
+    if parts.username is not None or parts.password is not None:
+        raise ValidationError("URLs with embedded credentials are not allowed.")
+    if parts.fragment:
+        raise ValidationError("URL fragments are not allowed.")
     if not parts.hostname:
         raise ValidationError("URL must include a hostname.")
 

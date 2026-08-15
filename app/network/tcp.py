@@ -55,7 +55,7 @@ def check(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict:
             with socket.socket(family, socktype, proto) as sock:
                 sock.settimeout(timeout)
                 result = sock.connect_ex(sockaddr)
-        except (socket.timeout, TimeoutError):
+        except TimeoutError:
             return {
                 "host": host,
                 "port": port,
@@ -95,4 +95,4 @@ def _invalid(host: str, port: int, detail: str) -> dict:
     }
 
 
-__all__ = ["TcpResult", "check", "DEFAULT_TIMEOUT"]
+__all__ = ["DEFAULT_TIMEOUT", "TcpResult", "check"]

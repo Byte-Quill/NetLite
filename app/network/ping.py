@@ -150,4 +150,4 @@ def _parse_output(host: str, output: str, sent: int) -> dict:
     )
 
 
-__all__ = ["PingResult", "run", "estimate_duration", "_parse_output"]
+__all__ = ["PingResult", "_parse_output", "estimate_duration", "run"]
