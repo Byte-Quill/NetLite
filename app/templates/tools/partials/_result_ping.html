@@ -1,0 +1,10 @@
+<div class="result {{ 'result-ok' if result.status == 'ok' else 'result-error' }}" data-tool-result="ping">
+  <dl class="result-list">
+    <div><dt>Status</dt><dd>{{ result.status }}</dd></div>
+    <div><dt>Host</dt><dd><code>{{ result.host }}</code></dd></div>
+    {% if result.resolved %}<div><dt>Resolved</dt><dd><code>{{ result.resolved }}</code></dd></div>{% endif %}
+    <div><dt>Sent / Received</dt><dd>{{ result.sent }} / {{ result.received }}</dd></div>
+    {% if result.latency_ms %}<div><dt>Latency</dt><dd>{{ result.latency_ms }}</dd></div>{% endif %}
+  </dl>
+  <p class="detail">{{ result.details }}</p>
+</div>

@@ -1,0 +1,26 @@
+<label for="tcp-target">Host</label>
+<input
+  id="tcp-target"
+  name="target"
+  type="text"
+  inputmode="text"
+  autocomplete="off"
+  placeholder="example.com or 8.8.8.8"
+  required
+  maxlength="253"
+>
+<label for="tcp-port">Port</label>
+<input
+  id="tcp-port"
+  name="port"
+  type="number"
+  inputmode="numeric"
+  min="1"
+  max="65535"
+  placeholder="443"
+  required
+>
+<button type="submit" class="btn-primary">
+  <span class="btn-label">Check</span>
+  <span id="loading-tcp" class="spinner" aria-hidden="true"></span>
+</button>

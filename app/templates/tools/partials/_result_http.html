@@ -1,0 +1,16 @@
+<div class="result {{ 'result-ok' if result.status_code and result.status_code < 400 else 'result-error' }}" data-tool-result="http">
+  <dl class="result-list">
+    <div><dt>URL</dt><dd class="wrap"><code>{{ result.url }}</code></dd></div>
+    {% if result.final_url and result.final_url != result.url %}<div><dt>Final URL</dt><dd class="wrap"><code>{{ result.final_url }}</code></dd></div>{% endif %}
+    <div><dt>Status</dt><dd>
+      {% if result.status_code %}<span class="pill {{ 'pill-open' if result.status_code < 400 else 'pill-closed' }}">{{ result.status_code }}</span>
+      {% else %}<span class="pill pill-closed">—</span>{% endif %}
+    </dd></div>
+    <div><dt>Time</dt><dd>{{ result.elapsed_ms }} ms</dd></div>
+    {% if result.redirects %}<div><dt>Redirects</dt><dd>{{ result.redirects }}</dd></div>{% endif %}
+    {% if result.content_type %}<div><dt>Content-Type</dt><dd class="wrap">{{ result.content_type }}</dd></div>{% endif %}
+    {% if result.server %}<div><dt>Server</dt><dd class="wrap">{{ result.server }}</dd></div>{% endif %}
+    {% if result.content_length %}<div><dt>Content-Length</dt><dd>{{ result.content_length }}</dd></div>{% endif %}
+  </dl>
+  {% if result.error %}<p class="detail">{{ result.error }}</p>{% endif %}
+</div>

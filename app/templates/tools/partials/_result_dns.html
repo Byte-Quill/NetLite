@@ -1,0 +1,24 @@
+<div class="result {{ 'result-ok' if not result.error else 'result-error' }}" data-tool-result="dns">
+  {% if result.error %}
+  <p class="detail">{{ result.error }}</p>
+  {% else %}
+  <dl class="result-list">
+    <div><dt>Host</dt><dd><code>{{ result.host }}</code></dd></div>
+    {% if result.canonical %}<div><dt>Canonical</dt><dd><code>{{ result.canonical }}</code></dd></div>{% endif %}
+    <div><dt>IPv4</dt>
+      <dd>
+        {% if result.ipv4 %}
+        <ul class="addr-list">{% for addr in result.ipv4 %}<li><code>{{ addr }}</code></li>{% endfor %}</ul>
+        {% else %}<span class="muted">none</span>{% endif %}
+      </dd>
+    </div>
+    <div><dt>IPv6</dt>
+      <dd>
+        {% if result.ipv6 %}
+        <ul class="addr-list">{% for addr in result.ipv6 %}<li><code>{{ addr }}</code></li>{% endfor %}</ul>
+        {% else %}<span class="muted">none</span>{% endif %}
+      </dd>
+    </div>
+  </dl>
+  {% endif %}
+</div>

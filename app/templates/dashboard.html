@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}NetLite · Tools{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Network Toolkit</h1>
+  <p class="muted">Small, fast, local diagnostics for your network.</p>
+</section>
+
+<div class="tool-grid" role="list" aria-label="Available tools">
+  {% for tool in tools %}
+  <button
+    class="tool-card"
+    type="button"
+    role="listitem"
+    data-tool="{{ tool.slug }}"
+    @click="activeTool = activeTool === '{{ tool.slug }}' ? null : '{{ tool.slug }}'"
+    :aria-pressed="activeTool === '{{ tool.slug }}'"
+    aria-pressed="false"
+  >
+    <span class="tool-icon" aria-hidden="true">{{ tool.icon }}</span>
+    <span class="tool-name">{{ tool.name }}</span>
+    <span class="tool-desc">{{ tool.description }}</span>
+  </button>
+  {% endfor %}
+</div>
+
+<div class="tool-panel" x-show="activeTool" x-cloak x-transition.opacity.duration.150ms>
+  {% for tool in tools %}
+  <section
+    class="tool"
+    x-show="activeTool === '{{ tool.slug }}'"
+    x-cloak
+    x-transition.opacity.duration.150ms
+    data-tool-panel="{{ tool.slug }}"
+  >
+    <h2>{{ tool.name }}</h2>
+    <form
+      hx-post="{{ url_for('tools.tool_' ~ tool.slug) }}"
+      hx-target="#result"
+      hx-swap="innerHTML"
+      hx-indicator="#loading-{{ tool.slug }}"
+      @submit="$nextTick(() => { if (window.htmx) htmx.trigger(($event.target), 'htmx:afterRequest'); })"
+    >
+      {% include 'tools/partials/' ~ tool.slug ~ '_form.html' %}
+    </form>
+  </section>
+  {% endfor %}
+</div>
+
+<div id="result" aria-live="polite" class="result-panel">
+  <p class="muted placeholder-hint">Run a tool above to see results here.</p>
+</div>
+{% endblock %}

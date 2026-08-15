@@ -1,0 +1,14 @@
+<div class="result {{ 'result-ok' if result.status == 'open' else 'result-error' }}" data-tool-result="tcp">
+  <dl class="result-list">
+    <div><dt>Host</dt><dd><code>{{ result.host }}</code></dd></div>
+    <div><dt>Port</dt><dd>{{ result.port }}</dd></div>
+    <div><dt>Status</dt><dd>
+      {% if result.status == 'open' %}<span class="pill pill-open">open</span>
+      {% elif result.status == 'closed' %}<span class="pill pill-closed">closed</span>
+      {% elif result.status == 'timeout' %}<span class="pill pill-timeout">timeout</span>
+      {% else %}<span class="pill pill-invalid">invalid</span>{% endif %}
+    </dd></div>
+    {% if result.resolved %}<div><dt>Resolved</dt><dd><code>{{ result.resolved | join(', ') }}</code></dd></div>{% endif %}
+  </dl>
+  <p class="detail">{{ result.detail }}</p>
+</div>

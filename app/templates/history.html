@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}NetLite · History{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Diagnostic History</h1>
+  <p class="muted">Recent tool runs. Only a short, non-sensitive summary is kept locally (max {{ max_history }} records).</p>
+</section>
+
+{% if records %}
+<table class="history-table">
+  <thead>
+    <tr><th scope="col">Tool</th><th scope="col">Target</th><th scope="col">Status</th><th scope="col">When</th><th scope="col">Summary</th></tr>
+  </thead>
+  <tbody>
+    {% for r in records %}
+    <tr>
+      <td>{{ r.tool }}</td>
+      <td class="mono wrap">{{ r.target }}</td>
+      <td><span class="pill {{ 'pill-open' if r.status in ('ok','open') else 'pill-closed' }}">{{ r.status }}</span></td>
+      <td class="muted">{{ r.timestamp }}</td>
+      <td class="muted wrap">{{ r.summary }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No history yet — run a diagnostic tool to see records here.</p>
+{% endif %}
+{% endblock %}
