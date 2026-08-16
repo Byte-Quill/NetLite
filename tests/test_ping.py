@@ -40,6 +40,28 @@ PING 10.255.255.1 (10.255.255.1) 56(84) bytes of data.
 3 packets transmitted, 0 received, 100% packet loss, time 2040ms
 """
 
+WINDOWS_OK_OUTPUT = """\
+Pinging example.com [93.184.216.34] with 32 bytes of data:
+Reply from 93.184.216.34: bytes=32 time=11ms TTL=57
+Reply from 93.184.216.34: bytes=32 time=11ms TTL=57
+Reply from 93.184.216.34: bytes=32 time=11ms TTL=57
+
+Ping statistics for 93.184.216.34:
+    Packets: Sent = 3, Received = 3, Lost = 0 (0% loss),
+Approximate round trip times in milli-seconds:
+    Minimum = 11ms, Maximum = 11ms, Average = 11ms
+"""
+
+WINDOWS_UNREACHABLE_OUTPUT = """\
+Pinging 10.255.255.1 with 32 bytes of data:
+Request timed out.
+Request timed out.
+Request timed out.
+
+Ping statistics for 10.255.255.1:
+    Packets: Sent = 3, Received = 0, Lost = 3 (100% loss),
+"""
+
 
 def test_parse_gnu_ok():
     result = ping_svc._parse_output("example.com", GNU_OK_OUTPUT, sent=3)
@@ -72,6 +94,20 @@ def test_parse_name_resolution_error():
     assert "Could not resolve" in result["details"]
 
 
+def test_parse_windows_ok():
+    result = ping_svc._parse_output("example.com", WINDOWS_OK_OUTPUT, sent=3)
+    assert result["status"] == "ok"
+    assert result["received"] == 3
+    assert result["latency_ms"] == "11 ms"
+
+
+def test_parse_windows_unreachable():
+    result = ping_svc._parse_output("10.255.255.1", WINDOWS_UNREACHABLE_OUTPUT, sent=3)
+    assert result["status"] == "unreachable"
+    assert result["received"] == 0
+    assert result["latency_ms"] is None
+
+
 def test_run_invokes_binary_without_shell(monkeypatch):
     called = {}
 
@@ -86,12 +122,35 @@ def test_run_invokes_binary_without_shell(monkeypatch):
 
     monkeypatch.setattr(ping_svc.shutil, "which", lambda _name: "/usr/bin/ping")
     monkeypatch.setattr(ping_svc.subprocess, "run", fake_run)
+    monkeypatch.setattr(ping_svc.os, "name", "posix")
 
     result = ping_svc.run("example.com", timeout=3.0, count=3)
 
     assert called["cmd"][0] == "/usr/bin/ping"
     assert called["cmd"][1:] == ["-c", "3", "-W", "3", "example.com"]
     assert result["status"] == "ok"
+
+
+def test_run_builds_windows_command(monkeypatch):
+    """On Windows the flags must be -n (count) and -w (timeout in ms)."""
+    called = {}
+
+    class FakeProc:
+        stdout = ""
+        stderr = ""
+        returncode = 0
+
+    def fake_run(cmd, **_kwargs):
+        called["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(ping_svc.shutil, "which", lambda _name: "C:\\Windows\\ping.exe")
+    monkeypatch.setattr(ping_svc.subprocess, "run", fake_run)
+    monkeypatch.setattr(ping_svc.os, "name", "nt")
+
+    ping_svc.run("example.com", timeout=3.0, count=3)
+
+    assert called["cmd"][1:] == ["-n", "3", "-w", "3000", "example.com"]
 
 
 def test_run_missing_binary(monkeypatch):

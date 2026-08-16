@@ -1,16 +1,30 @@
-"""Local network information service.
+"""Local network information service — cross-platform (Windows/macOS/Linux).
 
-Reads hostname, IP addresses, and (best-effort) default gateway.  All data is
-read-only; never modifies the system and never requires root.
+Reads hostname, IP addresses, and (best-effort) default gateway + DNS
+servers.  All data is read-only; never modifies the system and never requires
+root.  Gateway/DNS discovery is platform-specific and always best-effort:
+any failure degrades to ``None`` / empty rather than raising.
 """
 
 from __future__ import annotations
 
+import re
+import shutil
 import socket
+import subprocess
+import sys
 
 #: Files read for best-effort network info; override in tests.
 _PROC_ROUTE = "/proc/net/route"
 _RESOLV_CONF = "/etc/resolv.conf"
+
+#: Bound for helper subprocesses (netstat / ipconfig) so they can't hang.
+_SUBPROC_TIMEOUT = 5.0
+
+# Windows "Default Gateway . . . . . . . . . : 192.168.1.1"
+_WIN_GATEWAY_RE = re.compile(r"Default Gateway[^:]*:\s*([0-9a-fA-F.:]+)")
+# Windows "DNS Servers . . . . . . . . . . . : 1.1.1.1"
+_WIN_DNS_RE = re.compile(r"DNS Servers[^:]*:\s*([0-9a-fA-F.:]+)")
 
 
 def _default_gateway_linux() -> str | None:
@@ -28,6 +42,103 @@ def _default_gateway_linux() -> str | None:
     except (OSError, ValueError):
         pass
     return None
+
+
+def _default_gateway_macos() -> str | None:
+    """Read the default IPv4 gateway via ``netstat -rn`` (macOS/BSD)."""
+    binary = shutil.which("netstat")
+    if binary is None:
+        return None
+    try:
+        proc = subprocess.run(
+            [binary, "-rn", "-f", "inet"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=_SUBPROC_TIMEOUT,
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    for line in (proc.stdout or "").splitlines():
+        parts = line.split()
+        # "default  192.168.1.1  UGSc  en0"
+        if parts and parts[0] == "default" and len(parts) >= 2:
+            return parts[1]
+    return None
+
+
+def _default_gateway_windows() -> str | None:
+    """Read the default IPv4 gateway via ``ipconfig`` (Windows)."""
+    binary = shutil.which("ipconfig")
+    if binary is None:
+        return None
+    try:
+        proc = subprocess.run(
+            [binary],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=_SUBPROC_TIMEOUT,
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    match = _WIN_GATEWAY_RE.search(proc.stdout or "")
+    return match.group(1) if match else None
+
+
+def _default_gateway() -> str | None:
+    """Dispatch to the platform-appropriate gateway reader."""
+    if sys.platform.startswith("linux"):
+        return _default_gateway_linux()
+    if sys.platform == "darwin":
+        return _default_gateway_macos()
+    if sys.platform == "win32":
+        return _default_gateway_windows()
+    return None
+
+
+def _read_resolv_conf() -> list[str]:
+    """Read nameservers from /etc/resolv.conf (Linux/macOS)."""
+    servers: list[str] = []
+    try:
+        with open(_RESOLV_CONF, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line.startswith("nameserver"):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        servers.append(parts[1])
+    except OSError:
+        pass
+    return servers
+
+
+def _dns_servers_windows() -> list[str]:
+    """Read DNS servers via ``ipconfig /all`` (Windows)."""
+    binary = shutil.which("ipconfig")
+    if binary is None:
+        return []
+    try:
+        proc = subprocess.run(
+            [binary, "/all"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=_SUBPROC_TIMEOUT,
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return []
+    return [m.group(1) for m in _WIN_DNS_RE.finditer(proc.stdout or "")]
+
+
+def _dns_servers() -> list[str]:
+    """Dispatch to the platform-appropriate DNS-server reader."""
+    if sys.platform == "win32":
+        return _dns_servers_windows()
+    return _read_resolv_conf()
 
 
 def collect() -> dict:
@@ -55,11 +166,11 @@ def collect() -> dict:
     except AttributeError:
         info["ipv6_supported"] = False
 
-    # Default gateway (Linux /proc).  Returns None when not detectable.
-    info["default_gateway"] = _default_gateway_linux() or None
+    # Default gateway (platform-specific).  Returns None when not detectable.
+    info["default_gateway"] = _default_gateway() or None
 
-    # DNS configuration where available (resolv.conf).
-    info["dns_servers"] = _read_resolv_conf()
+    # DNS configuration where available (platform-specific).
+    info["dns_servers"] = _dns_servers()
 
     # FQDN of this machine if resolvable.
     try:
@@ -92,19 +203,13 @@ def _present(info: dict) -> dict:
     return out
 
 
-def _read_resolv_conf() -> list[str]:
-    servers: list[str] = []
-    try:
-        with open(_RESOLV_CONF, encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if line.startswith("nameserver"):
-                    parts = line.split()
-                    if len(parts) >= 2:
-                        servers.append(parts[1])
-    except OSError:
-        pass
-    return servers
-
-
-__all__ = ["_default_gateway_linux", "_read_resolv_conf", "collect"]
+__all__ = [
+    "_default_gateway",
+    "_default_gateway_linux",
+    "_default_gateway_macos",
+    "_default_gateway_windows",
+    "_dns_servers",
+    "_dns_servers_windows",
+    "_read_resolv_conf",
+    "collect",
+]

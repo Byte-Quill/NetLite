@@ -4,14 +4,32 @@ from __future__ import annotations
 
 import socket
 
+
+def _gai_msg_table() -> dict[int, str]:
+    """Build the gai-error → friendly-message table.
+
+    Not every ``socket.EAI_*`` constant exists on every platform (e.g.
+    ``EAI_NODATA`` / ``EAI_SERVICE`` are absent on some Windows builds), so
+    each entry is added only when the constant is available.  This keeps the
+    module importable everywhere.
+    """
+    table: dict[int, str] = {}
+    candidates = {
+        "EAI_NONAME": "The hostname does not exist in DNS.",
+        "EAI_AGAIN": "The nameserver temporarily failed; try again.",
+        "EAI_NODATA": "The hostname has no address records.",
+        "EAI_FAIL": "The nameserver returned a permanent failure.",
+        "EAI_SERVICE": "The requested service is not available.",
+    }
+    for name, message in candidates.items():
+        code = getattr(socket, name, None)
+        if code is not None:
+            table[code] = message
+    return table
+
+
 #: Common gai error codes → friendly messages (no raw OS text leakage).
-_GAI_MSG = {
-    socket.EAI_NONAME: "The hostname does not exist in DNS.",
-    socket.EAI_AGAIN: "The nameserver temporarily failed; try again.",
-    socket.EAI_NODATA: "The hostname has no address records.",
-    socket.EAI_FAIL: "The nameserver returned a permanent failure.",
-    socket.EAI_SERVICE: "The requested service is not available.",
-}
+_GAI_MSG = _gai_msg_table()
 
 
 def _friendly_gai_error(exc: socket.gaierror) -> str:

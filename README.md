@@ -18,13 +18,17 @@ Designed around five principles:
 1. **Extremely low resource usage** — no build step, no worker processes,
    SQLite only, minimal JS (HTMX + Alpine.js, vendored locally).
 2. **Fast startup** — one Flask app, one executor pool, no warm-up work.
-3. **Minimal dependencies** — Flask + requests are the only runtime dependencies.
+3. **Minimal dependencies** — Flask is the only runtime dependency.
 4. **Security** — input validation, SSRF protection, bounded timeouts, CSRF
    same-origin check, secure headers. See [Security model](#security-model) and
    [docs/security.md](docs/security.md).
 5. **Progressive enhancement** — server-rendered HTML fragments swapped by
    HTMX; the interface works even without JavaScript enabled (form posts
    still render results).
+
+Runs on **Linux, macOS, and Windows** (Python 3.12+). Platform differences
+(ping flags/output, gateway & DNS discovery, venv layout) are handled
+internally — the same `python3 run.py` command works everywhere.
 
 ---
 
@@ -82,8 +86,8 @@ Browser
     ├── Ping        (system binary via subprocess, arg-list only)
     ├── DNS         (socket.getaddrinfo / getnameinfo)
     ├── TCP         (socket.connect_ex, single host+port)
-    ├── HTTP        (requests with SSRF-pinned connection adapter)
-    └── Local Net   (socket + /proc/net/route + /etc/resolv.conf)
+    ├── HTTP        (stdlib urllib with SSRF-pinned connect)
+    └── Local Net   (socket + per-OS gateway/DNS discovery)
 ```
 
 ```
@@ -107,7 +111,7 @@ netlite/
 ├── docs/security.md       security model and SSRF policy
 ├── run.py                 development entry point
 ├── pyproject.toml         pytest + ruff + coverage config
-├── requirements.txt       Flask + requests (runtime deps)
+├── requirements.txt       Flask (only runtime dep)
 ├── LICENSE                MIT
 └── README.md
 ```
