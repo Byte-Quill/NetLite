@@ -12,21 +12,9 @@ later without touching this module.
 from __future__ import annotations
 
 import socket
-from dataclasses import dataclass
 
 #: Connection timeout configured by the caller; TCP checks bound to this.
 DEFAULT_TIMEOUT = 5.0
-
-
-@dataclass(frozen=True)
-class TcpResult:
-    """Outcome of a single TCP port check."""
-
-    host: str
-    port: int
-    status: str  # "open" | "closed" | "timeout" | "invalid"
-    resolved: list[str] | None
-    detail: str
 
 
 def check(host: str, port: int, timeout: float = DEFAULT_TIMEOUT) -> dict:
@@ -95,4 +83,4 @@ def _invalid(host: str, port: int, detail: str) -> dict:
     }
 
 
-__all__ = ["DEFAULT_TIMEOUT", "TcpResult", "check"]
+__all__ = ["DEFAULT_TIMEOUT", "check"]

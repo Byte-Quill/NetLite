@@ -43,17 +43,16 @@ class _FakeSocket:
 
 
 def _fake_addrinfo(host, port, family=socket.AF_INET):
-    return [
-        (family, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("1.2.3.4", port))
-    ]
+    return [(family, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("1.2.3.4", port))]
 
 
 def _patch_network(monkeypatch, result: int = 0, family=socket.AF_INET):
     monkeypatch.setattr(
         tcp_svc.socket,
         "getaddrinfo",
-        lambda host, port: [ _fake_addrinfo(host, port)[0] ]
-        if family else _fake_addrinfo(host, port),
+        lambda host, port: (
+            [_fake_addrinfo(host, port)[0]] if family else _fake_addrinfo(host, port)
+        ),
     )
     monkeypatch.setattr(tcp_svc.socket, "socket", lambda *args, **kw: _FakeSocket(result))
 

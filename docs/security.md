@@ -19,8 +19,8 @@ Browser  ──HTMX/forms──►  NetLite  (127.0.0.1:5000)  ──►  networ
 
 Because there are no sessions and no cookies, the strongest practical CSRF
 defense is a **stateless same-origin check** on state-changing requests
-(`app/main.py::_csrf_check`): any POST carrying an `Origin` header that does
-not match the request's own scheme+host+port is rejected with `403 HTTP`. Plain
+(`app/middleware.py::_csrf_check`): any POST carrying an `Origin` header that
+does not match the request's own scheme+host+port is rejected with `403 HTTP`. Plain
 curl/pytest clients (no `Origin`) are treated as non-browser and pass, which
 matches the local-tool intent.
 
@@ -63,15 +63,16 @@ contacted:
 2. **Pre-connect check** — the hostname is resolved and *every* address is
    validated (`app/network/ssrf.py::check_hostname`). Any blocked address
    aborts the request before a socket is opened.
-3. **Pinned connection** — the validated connection classes
-   (`app/network/http.py::_ValidatedHTTPConnection/HTTPSConnection`) perform
+3. **Pinned connection** — the requests/urllib3 connection classes
+   (`app/network/http.py::_PinnedHTTPConnection/_PinnedHTTPSConnection`) perform
    their **own** resolution through the same guard and connect to the
    SSRF-allowed address, while sending the original hostname in the `Host`
    header / TLS SNI. This closes the DNS-rebinding TOCTOU: the address the
    check approved is exactly the address that gets connected to.
-4. **Per-redirect re-check** — every `Location` hop is re-parsed and
-   re-validated (`_SsrfRedirectHandler`), so a public URL that 302s to a
-   private range is still blocked. Redirects are capped at 5.
+4. **Per-redirect re-check** — every redirect hop is routed through the same
+   pinned adapter (`_SSRFAdapter`), so a public URL that 302s to a private
+   range gets a fresh SSRF-checked connection and is still blocked. Redirects
+   are capped at 5.
 
 ### 2.3 The `NETLITE_ALLOW_PRIVATE=1` opt-in
 

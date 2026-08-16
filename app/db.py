@@ -68,8 +68,7 @@ def add_history(
     """Insert one history record and return its id."""
     with session(path) as conn:
         cur = conn.execute(
-            "INSERT INTO history (tool, target, status, timestamp, summary) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO history (tool, target, status, timestamp, summary) VALUES (?, ?, ?, ?, ?)",
             (tool, target[:255], status, timestamp, summary[:500]),
         )
         return int(cur.lastrowid)

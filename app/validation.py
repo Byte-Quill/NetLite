@@ -28,7 +28,9 @@ MAX_TARGET_LENGTH = 512
 MAX_URL_LENGTH = 2048
 
 # Letters, digits, hyphen-separated labels; conservative RFC 1035 shape.
-_HOSTNAME_RE = re.compile(r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
+_HOSTNAME_RE = re.compile(
+    r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
+)
 _ALLOWED_SCHEMES = {"http", "https"}
 
 # Canonical decimal port, 1-65535, no sign, no padding, no hex.
@@ -91,7 +93,10 @@ def looks_like_ip(value: str) -> bool:
 
 
 def ip_address_canonical(value: str) -> str:
-    """Return the canonical string form of an IP literal, or None if invalid."""
+    """Return the canonical string form of an IP literal.
+
+    Raises :class:`ValidationError` if ``value`` is not a valid IP.
+    """
     try:
         return str(ipaddress.ip_address(value))
     except ValueError:

@@ -8,7 +8,7 @@ misconfigured deployment fails fast at startup.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 # --- Defaults -------------------------------------------------------------
@@ -27,7 +27,6 @@ DEFAULT_MAX_CONTENT_LENGTH = 1 * 1024 * 1024  # 1 MiB of form data
 DEFAULT_CONNECT_TIMEOUT = 5.0
 DEFAULT_READ_TIMEOUT = 10.0
 DEFAULT_PING_TIMEOUT = 5.0
-DEFAULT_DNS_TIMEOUT = None  # OS resolver; kept False-y meaning "OS default"
 
 # HTTP inspector: cap on the number of response bytes we consume.
 DEFAULT_MAX_RESPONSE_BYTES = 256 * 1024  # 256 KiB
@@ -84,13 +83,9 @@ class Config:
     connect_timeout: float = DEFAULT_CONNECT_TIMEOUT
     read_timeout: float = DEFAULT_READ_TIMEOUT
     ping_timeout: float = DEFAULT_PING_TIMEOUT
-    dns_timeout: float | None = DEFAULT_DNS_TIMEOUT
 
     max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES
     allow_private: bool = DEFAULT_ALLOW_PRIVATE
-
-    # Runtime sensible defaults that depend on the Flask app instance.
-    instance_path: Path = field(default=Path("instance"), init=False, repr=False)
 
     @classmethod
     def from_env(cls) -> Config:
@@ -110,12 +105,8 @@ class Config:
             connect_timeout=_env_float(
                 "NETLITE_CONNECT_TIMEOUT", DEFAULT_CONNECT_TIMEOUT, minimum=0.1
             ),
-            read_timeout=_env_float(
-                "NETLITE_READ_TIMEOUT", DEFAULT_READ_TIMEOUT, minimum=0.1
-            ),
-            ping_timeout=_env_float(
-                "NETLITE_PING_TIMEOUT", DEFAULT_PING_TIMEOUT, minimum=0.1
-            ),
+            read_timeout=_env_float("NETLITE_READ_TIMEOUT", DEFAULT_READ_TIMEOUT, minimum=0.1),
+            ping_timeout=_env_float("NETLITE_PING_TIMEOUT", DEFAULT_PING_TIMEOUT, minimum=0.1),
             max_response_bytes=_env_int(
                 "NETLITE_MAX_RESPONSE_BYTES", DEFAULT_MAX_RESPONSE_BYTES, minimum=1024
             ),

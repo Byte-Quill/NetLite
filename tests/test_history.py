@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app import db as db_layer
 
 
 def _now():
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def test_schema_created(tmp_path):
@@ -98,6 +98,7 @@ def test_history_does_not_break_tool(monkeypatch, client):
     monkeypatch.setattr(db_module, "prune_history", boom)
 
     from unittest import mock
+
     with mock.patch("app.network.ping.shutil.which", return_value=None):
         resp = client.post("/tools/ping", data={"target": "example.com"})
         assert resp.status_code == 200

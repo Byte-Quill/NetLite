@@ -1,24 +1,24 @@
 """Tool endpoints.
 
-Each tool has a single POST route that validates input, invokes the
-corresponding network service, and returns an HTMX-compatible HTML fragment
-injected into ``#result``.
-
-ALL network operations run inside the bounded runner (see
-:mod:`app.services.runner`) so a hang can never block the worker thread
-indefinitely.
+Each tool from the registry (:mod:`app.tools`) gets a POST route that reads
+its form fields, invokes the corresponding network service, and returns an
+HTMX-compatible HTML fragment injected into ``#result``.  All network
+operations run inside the bounded runner so a hang can never block the
+worker thread indefinitely.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from flask import Blueprint, current_app, render_template, request
 
 from ..db import add_history, prune_history
+from ..extensions import get_config, get_database
 from ..services import runner
 from ..services.dispatch import run_tool
-from ..validation import ValidationError
+from ..tools import TOOLS
+from ..validation import MAX_TARGET_LENGTH, ValidationError
 
 bp = Blueprint("tools", __name__)
 
@@ -26,124 +26,85 @@ bp = Blueprint("tools", __name__)
 def _form_value(name: str) -> str:
     """Read a form field, stripping whitespace and enforcing length."""
     raw = (request.form.get(name) or "").strip()
-    if len(raw) > 512:
+    if len(raw) > MAX_TARGET_LENGTH:
         raise ValidationError("Input is too long.")
     return raw
 
 
 def _record(slug: str, target: str, status: str, summary: str) -> None:
     """Persist one history record, then prune to the retention cap."""
-    cfg = current_app.extensions["netlite_config"]
-    db_path = current_app.extensions["netlite_database"]
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
     try:
-        add_history(db_path, slug, target, status, now, summary)
-        prune_history(db_path, cfg.max_history)
+        add_history(
+            get_database(current_app),
+            slug,
+            target,
+            status,
+            summary=summary,
+            timestamp=now,
+        )
+        prune_history(get_database(current_app), get_config(current_app).max_history)
     except Exception:  # history must never break a diagnostic
         current_app.logger.warning("failed to record history", exc_info=True)
 
 
-def _summary(slug: str, result: dict) -> str:
-    """Build a short, non-sensitive summary string for the history table."""
-    status = result.get("status", "")
-    if slug == "ping":
-        return f"{status}: {result.get('received', 0)}/{result.get('sent', 0)} pkt"
-    if slug == "dns":
-        n4 = len(result.get("ipv4", []) or [])
-        n6 = len(result.get("ipv6", []) or [])
-        return f"{status or 'resolved'}: {n4} IPv4, {n6} IPv6"
-    if slug == "tcp":
-        return f"{result.get('status', '')}: port {result.get('port', '')} {result.get('detail', '')}"
-    if slug == "http":
-        code = result.get("status_code")
-        if code:
-            return f"HTTP {code}"
-        error = result.get("error")
-        return f"error: {error[:60]}" if error else status
-    if slug == "netinfo":
-        return f"host {result.get('hostname', '')}"
-    return status
-
-
-def _run_and_render(slug: str, target: str, extra: dict | None = None):
+def _run_and_render(tool, target: str, extra: dict | None = None):
     """Validate, run the tool, render the result fragment, record history."""
     try:
-        result = run_tool(slug, target=target, config=current_app.extensions["netlite_config"], extra=extra or {})
+        result = run_tool(
+            tool.slug, target=target, config=get_config(current_app), extra=extra or {}
+        )
     except ValidationError as exc:
         return render_template(
             "tools/partials/_result_error.html",
-            slug=slug,
+            slug=tool.slug,
             message=str(exc),
         ), 400
     except runner.ToolTimeout as exc:
-        _record(slug, target, "timeout", str(exc)[:120])
+        _record(tool.slug, target, "timeout", str(exc)[:120])
         return render_template(
             "tools/partials/_result_error.html",
-            slug=slug,
+            slug=tool.slug,
             message=str(exc),
         ), 408
     except Exception:  # never leak internals to the client
-        current_app.logger.exception("tool %s failed", slug)
+        current_app.logger.exception("tool %s failed", tool.slug)
         return render_template(
             "tools/partials/_result_error.html",
-            slug=slug,
+            slug=tool.slug,
             message="The tool failed unexpectedly.",
         ), 500
 
     status = result.get("status", "done")
-    _record(slug, target, status, _summary(slug, result))
+    _record(tool.slug, target, status, tool.summary(result))
     return render_template(
-        f"tools/partials/_result_{slug}.html",
-        slug=slug,
+        f"tools/partials/_result_{tool.slug}.html",
+        slug=tool.slug,
         result=result,
     )
 
 
-@bp.post("/tools/ping")
-def tool_ping():
-    try:
-        target = _form_value("target")
-    except ValidationError as exc:
-        return render_template(
-            "tools/partials/_result_error.html", slug="ping", message=str(exc)
-        ), 400
-    return _run_and_render("ping", target)
+def _tool_route(tool):
+    """Build the POST handler for one registered tool."""
+
+    def handler():
+        try:
+            target = _form_value("target")
+            extra = {"port": _form_value("port")} if tool.needs_port else {}
+        except ValidationError as exc:
+            return render_template(
+                "tools/partials/_result_error.html", slug=tool.slug, message=str(exc)
+            ), 400
+        return _run_and_render(tool, target, extra)
+
+    handler.__name__ = f"tool_{tool.slug}"
+    return handler
 
 
-@bp.post("/tools/dns")
-def tool_dns():
-    try:
-        target = _form_value("target")
-    except ValidationError as exc:
-        return render_template(
-            "tools/partials/_result_error.html", slug="dns", message=str(exc)
-        ), 400
-    return _run_and_render("dns", target)
-
-
-@bp.post("/tools/tcp")
-def tool_tcp():
-    try:
-        target = _form_value("target")
-        port = _form_value("port")
-    except ValidationError as exc:
-        return render_template(
-            "tools/partials/_result_error.html", slug="tcp", message=str(exc)
-        ), 400
-    return _run_and_render("tcp", target, extra={"port": port})
-
-
-@bp.post("/tools/http")
-def tool_http():
-    try:
-        target = _form_value("target")
-    except ValidationError as exc:
-        return render_template(
-            "tools/partials/_result_error.html", slug="http", message=str(exc)
-        ), 400
-    return _run_and_render("http", target)
-
-
-@bp.post("/tools/netinfo")
-def tool_netinfo():
-    return _run_and_render("netinfo", "")
+for _tool in TOOLS.values():
+    bp.add_url_rule(
+        f"/tools/{_tool.slug}",
+        f"tool_{_tool.slug}",
+        _tool_route(_tool),
+        methods=["POST"],
+    )

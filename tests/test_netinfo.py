@@ -7,13 +7,8 @@ graceful fallback behavior with monkeypatched sockets.
 
 from __future__ import annotations
 
-from app.config import Config
 from app.network import netinfo
 from app.network.netinfo import _default_gateway_linux, _present, _read_resolv_conf
-
-
-def _cfg():
-    return Config()
 
 
 def test_gateway_parsing(monkeypatch, tmp_path):
@@ -30,8 +25,7 @@ def test_gateway_parsing(monkeypatch, tmp_path):
 def test_gateway_no_default(monkeypatch, tmp_path):
     route_file = tmp_path / "route"
     route_file.write_text(
-        "Iface\tDestination\tGateway \tFlags\n"
-        "eth0\t01000000\t0101A8C0\t0003\n",
+        "Iface\tDestination\tGateway \tFlags\neth0\t01000000\t0101A8C0\t0003\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(netinfo, "_PROC_ROUTE", str(route_file))
@@ -70,7 +64,7 @@ def test_collect_graceful_fallback(monkeypatch):
     )
     monkeypatch.setattr(netinfo.socket, "getfqdn", lambda: "host.local")
 
-    result = netinfo.collect(_cfg())
+    result = netinfo.collect()
     assert result["hostname"] == "host.local"
     assert result["local_addresses"] is None
     assert result["primary_hostname"] is None

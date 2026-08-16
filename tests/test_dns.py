@@ -81,9 +81,7 @@ def test_lookup_canonical_via_getnameinfo(monkeypatch):
 
 
 def test_lookup_duplicates_deduped(monkeypatch):
-    infos = _fake_addrinfo(
-        [(socket.AF_INET, "1.2.3.4"), (socket.AF_INET, "1.2.3.4")]
-    )
+    infos = _fake_addrinfo([(socket.AF_INET, "1.2.3.4"), (socket.AF_INET, "1.2.3.4")])
     monkeypatch.setattr(dns_svc.socket, "getaddrinfo", lambda host, port: infos)
     monkeypatch.setattr(
         dns_svc.socket,
@@ -104,8 +102,9 @@ def test_dns_route_valid(client):
     def fake_getnameinfo(*_a, **_k):
         raise socket.gaierror(socket.EAI_NONAME, "")
 
-    with mock.patch("socket.getaddrinfo", fake_addrinfo), mock.patch(
-        "socket.getnameinfo", fake_getnameinfo
+    with (
+        mock.patch("socket.getaddrinfo", fake_addrinfo),
+        mock.patch("socket.getnameinfo", fake_getnameinfo),
     ):
         resp = client.post("/tools/dns", data={"target": "example.com"})
         assert resp.status_code == 200

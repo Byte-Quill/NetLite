@@ -12,19 +12,21 @@ from __future__ import annotations
 
 import argparse
 
+from app import __version__
 from app.config import DEFAULT_HOST, DEFAULT_PORT
 from app.main import create_app
 
 
-def parse_args(argv=None):
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the NetLite development server.")
     parser.add_argument("--host", default=DEFAULT_HOST, help="interface to bind")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="port to bind")
     parser.add_argument("--debug", action="store_true", help="enable Flask debug mode")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser.parse_args(argv)
 
 
-def main(argv=None) -> None:
+def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     app = create_app()
     # By default we bind to 127.0.0.1 only; expose via --host/--port with

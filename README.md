@@ -18,7 +18,7 @@ Designed around five principles:
 1. **Extremely low resource usage** — no build step, no worker processes,
    SQLite only, minimal JS (HTMX + Alpine.js, vendored locally).
 2. **Fast startup** — one Flask app, one executor pool, no warm-up work.
-3. **Minimal dependencies** — Flask is the only runtime dependency.
+3. **Minimal dependencies** — Flask + requests are the only runtime dependencies.
 4. **Security** — input validation, SSRF protection, bounded timeouts, CSRF
    same-origin check, secure headers. See [Security model](#security-model) and
    [docs/security.md](docs/security.md).
@@ -30,7 +30,7 @@ Designed around five principles:
 
 ## Quick Start
 
-Requires **Python 3.10+**.
+Requires **Python 3.12+**.
 
 ```console
 $ python3 -m venv .venv
@@ -82,7 +82,7 @@ Browser
     ├── Ping        (system binary via subprocess, arg-list only)
     ├── DNS         (socket.getaddrinfo / getnameinfo)
     ├── TCP         (socket.connect_ex, single host+port)
-    ├── HTTP        (urllib with SSRF-pinned connection classes)
+    ├── HTTP        (requests with SSRF-pinned connection adapter)
     └── Local Net   (socket + /proc/net/route + /etc/resolv.conf)
 ```
 
@@ -90,8 +90,11 @@ Browser
 netlite/
 ├── app/
 │   ├── __init__.py
-│   ├── main.py            app factory, secure headers, CSRF check, errors
+│   ├── main.py            app factory (thin wiring point)
 │   ├── config.py          env-driven immutable configuration
+│   ├── extensions.py      typed accessors for app-level values
+│   ├── middleware.py      secure headers, CSRF check, error handlers
+│   ├── tools.py           declarative registry of diagnostic tools
 │   ├── validation.py      hostname / IP / port / URL validators
 │   ├── db.py              SQLite history persistence
 │   ├── routes/            main (pages, history, health) + tools (POST endpoints)
@@ -104,7 +107,7 @@ netlite/
 ├── docs/security.md       security model and SSRF policy
 ├── run.py                 development entry point
 ├── pyproject.toml         pytest + ruff + coverage config
-├── requirements.txt       Flask (only runtime dep)
+├── requirements.txt       Flask + requests (runtime deps)
 ├── LICENSE                MIT
 └── README.md
 ```
@@ -112,12 +115,14 @@ netlite/
 ### Request lifecycle
 
 1. Browser POSTs a tool form; HTMX targets `#result`.
-2. The route reads and length-limits the form value.
+2. The route reads and length-limits the form fields declared by the tool's
+   registry entry (`app/tools.py`).
 3. `app/services/dispatch.run_tool` validates the input (strict host / port /
-   URL rules), then executes the network service **inside a bounded worker
-   thread** with a hard wall-clock deadline.
+   URL rules from the registry), then executes the network service **inside a
+   bounded worker thread** with a hard wall-clock deadline.
 4. The service returns a plain dict; the route renders an HTML fragment with
-   Jinja autoescaping and records a non-sensitive history row.
+   Jinja autoescaping and records a non-sensitive history row (summary format
+   also comes from the registry).
 5. HTMX swaps the fragment into the page.
 
 Every external network operation carries an explicit timeout (connect, read,

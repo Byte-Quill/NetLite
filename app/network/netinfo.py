@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import socket
 
-from ..config import Config
-
 #: Files read for best-effort network info; override in tests.
 _PROC_ROUTE = "/proc/net/route"
 _RESOLV_CONF = "/etc/resolv.conf"
@@ -32,7 +30,7 @@ def _default_gateway_linux() -> str | None:
     return None
 
 
-def collect(config: Config) -> dict:
+def collect() -> dict:
     """Collect local network information with graceful fallbacks.
 
     Every field is best-effort: any failure degrades to a ``None`` / empty

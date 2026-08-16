@@ -2,24 +2,10 @@
 
 from __future__ import annotations
 
-import socket
-import threading
-
 import pytest
 
 from app.config import Config
 from app.main import create_app
-
-
-def _free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
-
-
-@pytest.fixture(scope="session")
-def tmp_instance(tmp_path_factory):
-    return tmp_path_factory.mktemp("instance")
 
 
 @pytest.fixture()
@@ -44,19 +30,3 @@ def app(tmp_path):
 def client(app):
     """Test client bound to the ephemeral app."""
     return app.test_client()
-
-
-@pytest.fixture()
-def netlite_config(app):
-    return app.extensions["netlite_config"]
-
-
-def run_server(app, port):
-    """Run the Flask app in a background thread for integration tests."""
-
-    def serve():
-        app.run(host="127.0.0.1", port=port, use_reloader=False, threaded=True)
-
-    thread = threading.Thread(target=serve, daemon=True)
-    thread.start()
-    return thread

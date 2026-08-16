@@ -14,7 +14,7 @@ import socket
 
 import pytest
 
-from app.main import _same_origin
+from app.middleware import _same_origin
 from app.network import dns as dns_svc
 from app.network import http as http_svc
 from app.network import tcp as tcp_svc

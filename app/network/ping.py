@@ -21,8 +21,6 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
-import time
-from dataclasses import dataclass
 
 # GNU: "min/avg/max = 12.3/14.5/16.2 ms"
 # BSD: "min/avg/max/stddev = 12.3/14.5/16.2/0.9 ms"
@@ -31,22 +29,6 @@ _LATENCY_RE = re.compile(r"\=\s*([\d.]+)/([\d.]+)/([\d.]+)(?:/[\d.]+)?\s*ms")
 # "3 packets transmitted, 3 received, 0% packet loss"        (GNU)
 # "3 packets transmitted, 3 packets received, 0.0% packet loss" (BSD)
 _TRANSMITTED_RE = re.compile(r"(\d+)\s+packets? transmitted,\s+(\d+)\s+(?:packets?\s+)?received")
-
-
-@dataclass(frozen=True)
-class PingResult:
-    """Outcome of a single ping run.
-
-    ``status`` is one of ``ok`` / ``unreachable`` / ``timeout`` / ``error``.
-    """
-
-    status: str
-    host: str
-    resolved: str | None
-    sent: int
-    received: int
-    latency_ms: str | None
-    details: str
 
 
 def estimate_duration(timeout: float, count: int = 3) -> float:
@@ -58,12 +40,16 @@ def run(host: str, timeout: float = 5.0, count: int = 3) -> dict:
     """Ping ``host`` with the system binary, returning a result dict."""
     binary = shutil.which("ping")
     if binary is None:
-        return _result(host, "error", sent=0, received=0,
-                       details="ping binary is not available on this system.")
+        return _result(
+            host,
+            "error",
+            sent=0,
+            received=0,
+            details="ping binary is not available on this system.",
+        )
 
     # Argument-list invocation: no shell, no user-controlled flags.
     cmd = [binary, "-c", str(count), "-W", str(int(max(timeout, 1))), host]
-    started = time.monotonic()
     try:
         proc = subprocess.run(
             cmd,
@@ -73,15 +59,16 @@ def run(host: str, timeout: float = 5.0, count: int = 3) -> dict:
             check=False,
         )
     except subprocess.TimeoutExpired:
-        return _result(host, "timeout", sent=count, received=0,
-                       details=f"Ping did not finish within {timeout}s.")
-    elapsed = time.monotonic() - started
+        return _result(
+            host,
+            "timeout",
+            sent=count,
+            received=0,
+            details=f"Ping did not finish within {timeout}s.",
+        )
 
     output = (proc.stdout or "") + "\n" + (proc.stderr or "")
-    result = _parse_output(host, output, count)
-    # Elapsed is not surfaced by default; keep it for future latency fidelity.
-    result["_elapsed"] = round(elapsed * 1000, 1)
-    return result
+    return _parse_output(host, output, count)
 
 
 def _result(host, status, *, sent, received, details, resolved=None, latency_ms=None) -> dict:
@@ -150,4 +137,4 @@ def _parse_output(host: str, output: str, sent: int) -> dict:
     )
 
 
-__all__ = ["PingResult", "_parse_output", "estimate_duration", "run"]
+__all__ = ["_parse_output", "estimate_duration", "run"]

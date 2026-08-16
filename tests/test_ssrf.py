@@ -5,12 +5,10 @@ from __future__ import annotations
 import socket
 from unittest import mock
 
-import pytest
-
 from app.network import ssrf
-from app.validation import ValidationError
 
 # --- IP classification -----------------------------------------------------
+
 
 def test_public_ipv4_allowed():
     d = ssrf.check_ip("8.8.8.8", allow_private=False)
@@ -70,6 +68,7 @@ def test_allow_private_opt_in():
 
 # --- Hostname resolution ---------------------------------------------------
 
+
 def test_hostname_resolving_to_private_blocked():
     with mock.patch(
         "socket.getaddrinfo",
@@ -99,11 +98,11 @@ def test_hostname_dns_failure_blocked():
     assert d.allowed is False
 
 
-def test_guard_url_raises_for_private(monkeypatch):
+def test_hostname_resolving_to_private_rejected(monkeypatch):
     monkeypatch.setattr(
         socket,
         "getaddrinfo",
         lambda *a: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0))],
     )
-    with pytest.raises(ValidationError):
-        ssrf.guard_url("localhost", allow_private=False)
+    d = ssrf.check_hostname("localhost", allow_private=False)
+    assert d.allowed is False

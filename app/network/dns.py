@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import socket
-from dataclasses import dataclass
 
 #: Common gai error codes → friendly messages (no raw OS text leakage).
 _GAI_MSG = {
@@ -18,17 +17,6 @@ _GAI_MSG = {
 def _friendly_gai_error(exc: socket.gaierror) -> str:
     """Return a friendly message for a gai error without leaking internals."""
     return _GAI_MSG.get(exc.errno, "A DNS resolution error occurred.")
-
-
-@dataclass(frozen=True)
-class DnsResult:
-    """Result of a DNS lookup."""
-
-    host: str
-    ipv4: list[str]
-    ipv6: list[str]
-    canonical: str | None
-    error: str | None
 
 
 def lookup(host: str) -> dict:
@@ -72,9 +60,7 @@ def lookup(host: str) -> dict:
             canonical = None
     elif not canonical and ipv6:
         try:
-            host, _port = socket.getnameinfo(
-                (ipv6[0].split("%")[0], 0, 0, 0), socket.NI_NAMEREQD
-            )
+            host, _port = socket.getnameinfo((ipv6[0].split("%")[0], 0, 0, 0), socket.NI_NAMEREQD)
             canonical = host or None
         except (socket.gaierror, OSError):
             canonical = None
@@ -97,4 +83,4 @@ def lookup(host: str) -> dict:
     }
 
 
-__all__ = ["DnsResult", "lookup"]
+__all__ = ["lookup"]

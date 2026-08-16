@@ -22,11 +22,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 _EXECUTOR = ThreadPoolExecutor(max_workers=8, thread_name_prefix="netlite-tool")
 
 
-class ToolError(RuntimeError):
-    """Base class for tool execution failures."""
-
-
-class ToolTimeout(ToolError):
+class ToolTimeout(RuntimeError):
     """Raised when a tool call exceeds its configured deadline."""
 
 
@@ -49,4 +45,4 @@ def run_with_timeout(fn, timeout: float | None, *args, **kwargs) -> object:
         raise
 
 
-__all__ = ["ToolError", "ToolTimeout", "run_with_timeout"]
+__all__ = ["ToolTimeout", "run_with_timeout"]
