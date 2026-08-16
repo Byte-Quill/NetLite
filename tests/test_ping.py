@@ -123,12 +123,36 @@ def test_run_invokes_binary_without_shell(monkeypatch):
     monkeypatch.setattr(ping_svc.shutil, "which", lambda _name: "/usr/bin/ping")
     monkeypatch.setattr(ping_svc.subprocess, "run", fake_run)
     monkeypatch.setattr(ping_svc.os, "name", "posix")
+    monkeypatch.setattr(ping_svc.sys, "platform", "linux")
 
     result = ping_svc.run("example.com", timeout=3.0, count=3)
 
     assert called["cmd"][0] == "/usr/bin/ping"
     assert called["cmd"][1:] == ["-c", "3", "-W", "3", "example.com"]
     assert result["status"] == "ok"
+
+
+def test_run_builds_macos_command(monkeypatch):
+    """On macOS/BSD the -W flag takes milliseconds, unlike GNU/Linux seconds."""
+    called = {}
+
+    class FakeProc:
+        stdout = ""
+        stderr = ""
+        returncode = 0
+
+    def fake_run(cmd, **_kwargs):
+        called["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(ping_svc.shutil, "which", lambda _name: "/sbin/ping")
+    monkeypatch.setattr(ping_svc.subprocess, "run", fake_run)
+    monkeypatch.setattr(ping_svc.os, "name", "posix")
+    monkeypatch.setattr(ping_svc.sys, "platform", "darwin")
+
+    ping_svc.run("example.com", timeout=3.0, count=3)
+
+    assert called["cmd"][1:] == ["-c", "3", "-W", "3000", "example.com"]
 
 
 def test_run_builds_windows_command(monkeypatch):

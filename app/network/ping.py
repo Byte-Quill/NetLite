@@ -23,6 +23,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 
 # GNU: "min/avg/max = 12.3/14.5/16.2 ms"
 # BSD: "min/avg/max/stddev = 12.3/14.5/16.2/0.9 ms"
@@ -48,12 +49,19 @@ def estimate_duration(timeout: float, count: int = 3) -> float:
 
 
 def _build_command(binary: str, host: str, timeout: float, count: int) -> list[str]:
-    """Build the ping argument list for this platform (no shell involved)."""
+    """Build the ping argument list for this platform (no shell involved).
+
+    The per-packet wait flag differs by implementation:
+    * Windows ``ping``: ``-n <count>`` and ``-w <milliseconds>``;
+    * BSD/macOS ``ping``: ``-c <count>`` and ``-W <milliseconds>``;
+    * GNU/Linux ``ping``: ``-c <count>`` and ``-W <seconds>``.
+    """
+    seconds = int(max(timeout, 1))
     if os.name == "nt":
-        # Windows: -n count, -w per-packet timeout in milliseconds.
-        return [binary, "-n", str(count), "-w", str(int(max(timeout, 1)) * 1000), host]
-    # macOS/BSD ping also supports -c/-W; GNU uses -c/-W as well.
-    return [binary, "-c", str(count), "-W", str(int(max(timeout, 1))), host]
+        return [binary, "-n", str(count), "-w", str(seconds * 1000), host]
+    if sys.platform == "darwin":
+        return [binary, "-c", str(count), "-W", str(seconds * 1000), host]
+    return [binary, "-c", str(count), "-W", str(seconds), host]
 
 
 def run(host: str, timeout: float = 5.0, count: int = 3) -> dict:
