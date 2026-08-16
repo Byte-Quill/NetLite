@@ -33,12 +33,12 @@ Designed around five principles:
 Requires **Python 3.12+**.
 
 ```console
-$ python3 -m venv .venv
-$ .venv/bin/pip install -r requirements.txt
-$ .venv/bin/python run.py
+$ python3 run.py
 ```
 
-Then open <http://127.0.0.1:5000/>.
+That's it. On first run the script creates a `.venv`, installs the single
+dependency (Flask), and relaunches itself inside it — no manual venv or pip
+steps needed. Then open <http://127.0.0.1:5000/>.
 
 > By default NetLite binds to `127.0.0.1` only. You can override with
 > `--host` / `--port`, but **do not expose it to the internet** without
