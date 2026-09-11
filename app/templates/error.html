@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}NetLite · {{ status }}{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>{{ status }}</h1>
+  <p class="muted">{{ message }}</p>
+  <p><a class="btn-primary" href="{{ url_for('main.index') }}">Back to tools</a></p>
+</section>
+{% endblock %}

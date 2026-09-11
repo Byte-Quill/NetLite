@@ -39,3 +39,6 @@ def test_secure_headers_present(client):
 def test_unknown_tool_returns_error_fragment(client):
     resp = client.post("/tools/unknown")
     assert resp.status_code == 404
+    # Non-API errors now render the HTML error page.
+    assert b"<h1>404</h1>" in resp.data
+    assert b"Back to tools" in resp.data

@@ -127,14 +127,23 @@ def test_inspect_ssrf_private_host_blocked(monkeypatch):
 
 
 def test_inspect_ssrf_allow_private_opt_in(monkeypatch):
-    # With ALLOW_PRIVATE, the request goes through (mocked here).
+    # With ALLOW_PRIVATE, a private (non-loopback) target goes through (mocked here).
     headers = {"Content-Type": "text/plain"}
     resp = _FakeResponse(status=200, headers=headers, body=b"x")
     _patch_urllib(monkeypatch, response=resp)
 
-    result = http_svc.inspect("http://127.0.0.1/", _cfg(allow_private=True))
+    result = http_svc.inspect("http://10.0.0.5/", _cfg(allow_private=True))
     assert result["status_code"] == 200
     assert result["error"] is None
+
+
+def test_inspect_loopback_blocked_even_with_opt_in(monkeypatch):
+    # Loopback is always-blocked for both families, opt-in or not.
+    _patch_urllib(monkeypatch, response=_FakeResponse())
+    for url in ("http://127.0.0.1/", "http://[::1]/"):
+        result = http_svc.inspect(url, _cfg(allow_private=True))
+        assert result["error"] is not None
+        assert result["status_code"] is None
 
 
 def test_inspect_oversized_response_truncated(monkeypatch):

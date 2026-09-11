@@ -20,7 +20,10 @@ Browser  ──HTMX/forms──►  NetLite  (127.0.0.1:5000)  ──►  networ
 Because there are no sessions and no cookies, the strongest practical CSRF
 defense is a **stateless same-origin check** on state-changing requests
 (`app/middleware.py::_csrf_check`): any POST carrying an `Origin` header that
-does not match the request's own scheme+host+port is rejected with `403 HTTP`. Plain
+does not match a host NetLite is actually bound to (the configured
+`NETLITE_HOST`/`NETLITE_PORT` plus loopback aliases) is rejected with `403 HTTP`.
+The expected origin is **never** derived from the request's `Host` header —
+that would let a client that controls both headers forge a match. Plain
 curl/pytest clients (no `Origin`) are treated as non-browser and pass, which
 matches the local-tool intent.
 
@@ -53,7 +56,11 @@ contacted:
 **Always blocked even with the opt-in flag:**
 
 - Cloud metadata endpoints: `169.254.169.254/32`
-- `0.0.0.0/8`, `255.255.255.255/32`, `::1/128`
+- `0.0.0.0/8`, `255.255.255.255/32`
+- Loopback, both families: `127.0.0.0/8` and `::1/128`
+- IPv4-mapped IPv6 addresses are unwrapped and classified by the IPv4 they
+  actually reach, so `::ffff:127.0.0.1` and `::ffff:169.254.169.254` are
+  blocked exactly like their IPv4 forms.
 
 ### 2.2 How the check is applied
 
@@ -76,10 +83,9 @@ contacted:
 
 ### 2.3 The `NETLITE_ALLOW_PRIVATE=1` opt-in
 
-Switching this on permits loopback/private/link-local/CGNAT targets. It is
-**strongly discouraged** and exists only for niche local-only use (e.g.
-probing a LAN router's admin page). Even with it enabled, the *always-blocked*
-table in §2.1 remains enforced.
+Switching this on permits private/link-local/CGNAT targets (e.g. probing a
+LAN router's admin page). It is **strongly discouraged**. Loopback and the
+*always-blocked* table in §2.1 remain enforced even with it enabled.
 
 ### 2.4 Notes on other tools
 

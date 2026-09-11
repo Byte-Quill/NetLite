@@ -87,11 +87,19 @@ def _ssrf_safe_resolve(hostname: str, port: int, allow_private: bool):
 
 
 class _ValidatedHTTPConnection(http.client.HTTPConnection):
-    """HTTPConnection that resolves its peer through the SSRF guard."""
+    """HTTPConnection that resolves its peer through the SSRF guard.
 
-    _allow_private = False
-    _connect_timeout = 5.0
-    _read_timeout = 10.0
+    Per-instance settings (``_allow_private`` / timeouts) are supplied by
+    :class:`_ConfiguredHandler` at construction time; they are never stored
+    on the class, so concurrent openers with different configs cannot race.
+    """
+
+    def __init__(self, *args, allow_private: bool = False,
+                 connect_timeout: float = 5.0, read_timeout: float = 10.0, **kwargs):
+        self._allow_private = allow_private
+        self._connect_timeout = connect_timeout
+        self._read_timeout = read_timeout
+        super().__init__(*args, **kwargs)
 
     def connect(self):
         _family, _stype, _proto, sockaddr = _ssrf_safe_resolve(
@@ -108,14 +116,13 @@ class _ValidatedHTTPSConnection(_ValidatedHTTPConnection, http.client.HTTPSConne
     """HTTPSConnection variant: validated TCP + TLS with SNI = hostname.
 
     MRO is _ValidatedHTTPSConnection → _ValidatedHTTPConnection →
-    HTTPSConnection → HTTPConnection; we re-declare __init__ so the SSL
-    ``context`` kwarg urllib passes is accepted and stored on ``self._context``
-    (used by connect()).
+    HTTPSConnection → HTTPConnection.  The SSL ``context`` kwarg urllib's
+    HTTPSHandler passes is forwarded to the stdlib constructor so the
+    caller's context is preserved (``self._context`` stays the one given).
     """
 
-    def __init__(self, host, port=None, *, context=None, **kwargs):
-        self._context = context or ssl._create_default_https_context()
-        super().__init__(host, port, **kwargs)
+    def __init__(self, *args, context=None, **kwargs):
+        super().__init__(*args, context=context, **kwargs)
 
     def connect(self):
         _ValidatedHTTPConnection.connect(self)
@@ -128,18 +135,46 @@ class _ValidatedHTTPSConnection(_ValidatedHTTPConnection, http.client.HTTPSConne
         )
 
 
-class _ValidatedHTTPHandler(urllib.request.HTTPHandler):
-    http_class = _ValidatedHTTPConnection
+class _ConfiguredHandler(urllib.request.HTTPHandler):
+    """HTTP handler that injects per-opener SSRF/timeout settings per connection."""
+
+    def __init__(self, cfg: Config):
+        super().__init__()
+        self._cfg = cfg
 
     def http_open(self, req):
-        return self.do_open(self.http_class, req)
+        return self.do_open(self._connection_factory(), req)
+
+    def _connection_factory(self):
+        cfg = self._cfg
+        return lambda *args, **kwargs: _ValidatedHTTPConnection(
+            *args,
+            allow_private=cfg.allow_private,
+            connect_timeout=cfg.connect_timeout,
+            read_timeout=cfg.read_timeout,
+            **kwargs,
+        )
 
 
-class _ValidatedHTTPSHandler(urllib.request.HTTPSHandler):
-    https_class = _ValidatedHTTPSConnection
+class _ConfiguredHTTPSHandler(_ConfiguredHandler, urllib.request.HTTPSHandler):
+    """HTTPS variant: same injection plus the caller's SSL context."""
+
+    def __init__(self, cfg: Config, context):
+        urllib.request.HTTPSHandler.__init__(self, context=context)
+        self._cfg = cfg
 
     def https_open(self, req):
-        return self.do_open(self.https_class, req)
+        cfg = self._cfg
+        return self.do_open(
+            lambda *args, **kwargs: _ValidatedHTTPSConnection(
+                *args,
+                allow_private=cfg.allow_private,
+                connect_timeout=cfg.connect_timeout,
+                read_timeout=cfg.read_timeout,
+                **kwargs,
+            ),
+            req,
+        )
 
 
 class _SsrfRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -290,27 +325,19 @@ def _build_opener(cfg: Config):
     The resolved peer is pinned to an SSRF-allowed address (closing the
     DNS-rebinding TOCTOU), redirects are re-validated per hop, and the
     returned opener carries a ``redirect_handler`` attribute so callers can
-    inspect how many hops were followed.
+    inspect how many hops were followed.  SSRF/timeout settings travel on
+    each connection instance (never on the classes), so concurrent openers
+    with different configs cannot interfere.
     """
     redirect_handler = _SsrfRedirectHandler(cfg.allow_private)
-
-    import ssl
 
     ssl_ctx = ssl.create_default_context()
 
     handlers: list = [
-        _ValidatedHTTPHandler(),
+        _ConfiguredHTTPSHandler(cfg, context=ssl_ctx),
+        _ConfiguredHandler(cfg),
         redirect_handler,
     ]
-    if http.client.HTTPSConnection is not None:
-        https_handler = _ValidatedHTTPSHandler(context=ssl_ctx)
-        handlers.insert(0, https_handler)
-
-    # Propagate timeout + SSRF settings into the connection classes.
-    for cls in (_ValidatedHTTPConnection, _ValidatedHTTPSConnection):
-        cls._allow_private = cfg.allow_private
-        cls._connect_timeout = cfg.connect_timeout
-        cls._read_timeout = cfg.read_timeout
 
     opener = urllib.request.build_opener(*handlers)
     opener.redirect_handler = redirect_handler

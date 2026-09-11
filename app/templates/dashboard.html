@@ -35,6 +35,8 @@
   >
     <h2>{{ tool.name }}</h2>
     <form
+      method="post"
+      action="{{ url_for('tools.tool_' ~ tool.slug) }}"
       hx-post="{{ url_for('tools.tool_' ~ tool.slug) }}"
       hx-target="#result"
       hx-swap="innerHTML"

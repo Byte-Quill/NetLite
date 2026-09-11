@@ -18,7 +18,7 @@ def test_public_ipv4_allowed():
 def test_loopback_blocked():
     d = ssrf.check_ip("127.0.0.1", allow_private=False)
     assert d.allowed is False
-    assert "loopback" in d.reason.lower() or "private" in d.reason.lower()
+    assert "blocked" in d.reason.lower()
 
 
 def test_private_ranges_blocked():
@@ -62,8 +62,20 @@ def test_invalid_ip_rejected():
 
 
 def test_allow_private_opt_in():
-    d = ssrf.check_ip("127.0.0.1", allow_private=True)
+    # Private ranges are permitted with the opt-in...
+    d = ssrf.check_ip("10.0.0.1", allow_private=True)
     assert d.allowed is True
+    # ...but loopback stays always-blocked for both families.
+    assert ssrf.check_ip("127.0.0.1", allow_private=True).allowed is False
+    assert ssrf.check_ip("::1", allow_private=True).allowed is False
+
+
+def test_ipv4_mapped_ipv6_unwrapped():
+    # ::ffff:<v4> must be classified by the IPv4 it actually reaches.
+    assert ssrf.check_ip("::ffff:127.0.0.1", allow_private=True).allowed is False
+    assert ssrf.check_ip("::ffff:169.254.169.254", allow_private=True).allowed is False
+    assert ssrf.check_ip("::ffff:10.0.0.1", allow_private=True).allowed is True
+    assert ssrf.check_ip("::ffff:8.8.8.8", allow_private=False).allowed is True
 
 
 # --- Hostname resolution ---------------------------------------------------
