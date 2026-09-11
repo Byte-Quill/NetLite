@@ -111,6 +111,13 @@ def _budget_ping(config: Config) -> float:
     return config.ping_timeout + ping.estimate_duration(config.ping_timeout) + 1.0
 
 
+def _budget_netinfo(config: Config) -> float:
+    # netinfo performs no network probes; its cost is OS resolver calls
+    # (gethostbyname_ex / getfqdn), which can retry for 5-10s on a slow
+    # resolver, plus subprocesses already bounded at 5s each.
+    return 15.0
+
+
 def _budget_default(config: Config) -> float:
     # read_timeout covers the longest single bounded operation; add a small
     # margin for resolution + response processing.
@@ -185,6 +192,7 @@ TOOLS: dict[str, Tool] = {
             run=_run_netinfo,
             summary=_summary_netinfo,
             validate=_validate_none,
+            budget=_budget_netinfo,
         ),
     )
 }

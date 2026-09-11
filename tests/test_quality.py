@@ -132,6 +132,57 @@ def test_parse_url_rejects_empty():
             parse_url(bad)
 
 
+def test_parse_url_malformed_port_is_validation_error():
+    """Regression: raw ValueError from urlsplit/parts.port must be converted."""
+    for bad in ["http://example.com:abc/", "http://example.com:99999/",
+                "http://example.com:-1/"]:
+        with pytest.raises(ValidationError):
+            parse_url(bad)
+
+
+def test_parse_url_bad_ipv6_bracket_is_validation_error():
+    with pytest.raises(ValidationError):
+        parse_url("http://[::1/path")
+
+
+def test_route_bad_url_port_returns_400_not_500(client):
+    """Regression: malformed URL port crashed with 500 before the fix."""
+    resp = client.post("/tools/http", data={"target": "http://example.com:abc/"})
+    assert resp.status_code == 400
+    assert b"failed unexpectedly" not in resp.data
+
+
+def test_runner_propagates_tool_timeout_error():
+    """Regression: a tool-raised TimeoutError must not become ToolTimeout."""
+    def socket_timeout():
+        raise TimeoutError("socket connect timed out")
+
+    with pytest.raises(TimeoutError, match="socket connect"):
+        runner.run_with_timeout(socket_timeout, 30.0)
+
+
+def test_https_connection_preserves_caller_context():
+    """Regression: the SSL context kwarg was silently dropped."""
+    import ssl
+
+    from app.network.http import _ValidatedHTTPSConnection
+
+    ctx = ssl.create_default_context()
+    conn = _ValidatedHTTPSConnection("example.test", 443, context=ctx)
+    assert conn._context is ctx
+
+
+def test_opener_does_not_mutate_connection_classes():
+    """Regression: SSRF/timeout settings were written to class attributes."""
+    from app.config import Config
+    from app.network.http import _build_opener
+    from app.network.http import _ValidatedHTTPConnection as _VHC
+
+    _build_opener(Config(allow_private=True, connect_timeout=9.0, read_timeout=9.0))
+    assert "_allow_private" not in _VHC.__dict__
+    assert "_connect_timeout" not in _VHC.__dict__
+
+
 # --- HTTP inspector branches ------------------------------------------------
 
 def test_http_redirect_cap_blocks_loop(monkeypatch):

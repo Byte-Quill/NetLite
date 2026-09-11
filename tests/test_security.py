@@ -32,10 +32,22 @@ def test_csrf_blocks_cross_origin_post(client):
 
 
 def test_csrf_blocks_cross_origin_with_host_spoof(client):
+    """A forged Host header must not legitimize a matching foreign Origin."""
     resp = client.post(
         "/tools/tcp",
         data={"target": "example.com", "port": "443"},
-        headers={"Origin": "http://127.0.0.1:5000", "Host": "evil.example"},
+        headers={"Origin": "http://evil.example", "Host": "evil.example"},
+    )
+    assert resp.status_code == 403
+
+
+def test_csrf_blocks_forged_host_with_matching_origin(client):
+    """Even Host+Origin that agree with each other are rejected when the
+    host is not one NetLite is bound to (regression for the Host-trust bug)."""
+    resp = client.post(
+        "/tools/ping",
+        data={"target": "example.com"},
+        headers={"Origin": "http://attacker.test:5000", "Host": "attacker.test:5000"},
     )
     assert resp.status_code == 403
 
@@ -44,7 +56,7 @@ def test_csrf_allows_same_origin(client):
     resp = client.post(
         "/tools/ping",
         data={"target": "example.invalid"},
-        headers={"Origin": "http://localhost"},
+        headers={"Origin": "http://127.0.0.1:5000"},
     )
     # The tool itself may 400/200; the point is origin passes (not 403).
     assert resp.status_code != 403

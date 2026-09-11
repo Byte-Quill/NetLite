@@ -36,6 +36,10 @@ def run_with_timeout(fn, timeout: float | None, *args, **kwargs) -> object:
     try:
         return future.result(timeout=timeout)
     except TimeoutError:
+        if future.done():
+            # The tool itself raised a TimeoutError (e.g. socket.timeout);
+            # propagate it rather than misreporting a budget expiry.
+            raise
         # The thread is still running in the background; we cannot cancel a
         # blocking socket, but the service code bounds every operation so it
         # will terminate on its own shortly after.

@@ -143,7 +143,11 @@ def parse_url(value: str) -> ParsedURL:
     if "://" not in value:
         raise ValidationError('URL must include a scheme, e.g. "https://example.com".')
 
-    parts = urlsplit(value)
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        # e.g. "http://[::1/path" → "Invalid IPv6 URL"
+        raise ValidationError("Invalid URL.") from None
     scheme = parts.scheme.lower()
     if scheme not in _ALLOWED_SCHEMES:
         raise ValidationError("Only http and https URLs are allowed.")
@@ -156,10 +160,16 @@ def parse_url(value: str) -> ParsedURL:
 
     hostname = normalize_hostname(parts.hostname)
 
+    # ``parts.port`` raises a raw ValueError for non-numeric / out-of-range
+    # ports (e.g. "http://h:abc/" or "http://h:99999/"); convert it so the
+    # route layer sees a ValidationError (400) instead of a crash (500).
+    try:
+        raw_port = parts.port
+    except ValueError:
+        raise ValidationError("Port must be a number between 1 and 65535.") from None
     port: int | None = None
-    if parts.port is not None:
-        port = parse_port(parts.port)
-
+    if raw_port is not None:
+        port = parse_port(raw_port)
     netloc = hostname
     if port is not None:
         netloc = f"{hostname}:{port}"

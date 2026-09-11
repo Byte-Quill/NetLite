@@ -30,15 +30,27 @@ CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history (timestamp DESC);
 """
 
 
+#: Paths whose schema has been initialized in this process (benign race:
+#: worst case the idempotent DDL runs twice).
+_INITIALIZED: set[Path] = set()
+
+
 def connect(path: Path) -> sqlite3.Connection:
-    """Open a new SQLite connection to ``path`` (creating it if needed)."""
+    """Open a new SQLite connection to ``path`` (creating it if needed).
+
+    The schema is created only once per path per process; subsequent
+    connections (including reads) skip the DDL and only set the cheap
+    per-connection PRAGMAs.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path), timeout=5.0)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA busy_timeout=5000;")
     conn.execute("PRAGMA foreign_keys=ON;")
-    conn.executescript(SCHEMA)
+    if path not in _INITIALIZED:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.executescript(SCHEMA)
+        _INITIALIZED.add(path)
     return conn
 
 

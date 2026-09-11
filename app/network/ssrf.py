@@ -15,11 +15,13 @@ import socket
 from dataclasses import dataclass
 
 #: Destinations blocked even with ALLOW_PRIVATE=1 (metadata endpoint abuse).
+#: Loopback is always blocked for both families: 127.0.0.0/8 and ::1/128.
 _ALWAYS_BLOCKED = (
     ipaddress.ip_network("0.0.0.0/8"),  # "this" network
+    ipaddress.ip_network("127.0.0.0/8"),  # IPv4 loopback
     ipaddress.ip_network("255.255.255.255/32"),  # broadcast
     ipaddress.ip_network("169.254.169.254/32"),  # cloud metadata
-    ipaddress.ip_network("::1/128"),  # loopback
+    ipaddress.ip_network("::1/128"),  # IPv6 loopback
 )
 
 #: CGNAT range (100.64/10) is not flagged by ipaddress properties.
@@ -38,6 +40,10 @@ class SsrfDecision:
 
 def _classify(ip: ipaddress._BaseAddress) -> str | None:
     """Label ``ip`` when it falls in a blocked/fenced range."""
+    # Unwrap IPv4-mapped IPv6 (::ffff:0:0/96) so e.g. ::ffff:127.0.0.1 and
+    # ::ffff:169.254.169.254 are classified by the IPv4 they actually reach.
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
     if any(ip in net for net in _ALWAYS_BLOCKED):
         return "reserved"
     if ip.is_loopback:
